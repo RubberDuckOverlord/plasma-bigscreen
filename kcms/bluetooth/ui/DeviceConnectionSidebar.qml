@@ -22,6 +22,9 @@ Bigscreen.SidebarOverlay {
     property bool connecting: false
     property bool disconnecting: false
     property string operationError: ""
+    property bool connectAfterPair: false
+    property int connectAfterPairAttempts: 0
+    property int operationSerial: 0
 
     function operationStatusText() {
         if (operationError) {
@@ -64,7 +67,18 @@ Bigscreen.SidebarOverlay {
         }
     }
 
-    function finishOperation(call, fallbackError, connectAfterSuccess) {
+    function beginOperation() {
+        operationSerial++;
+        operationTimeoutTimer.restart();
+        return operationSerial;
+    }
+
+    function finishOperation(call, fallbackError, connectAfterSuccess, serial) {
+        if (serial !== operationSerial) {
+            return;
+        }
+
+        operationTimeoutTimer.stop();
         root.connecting = false;
         root.disconnecting = false;
 
@@ -76,14 +90,78 @@ Bigscreen.SidebarOverlay {
         root.operationError = "";
         markInputDeviceTrusted();
 
-        if (connectAfterSuccess && device && Script.isInputDevice(device) && device.paired && !device.connected) {
+        if (connectAfterSuccess && device && Script.isInputDevice(device) && !device.connected) {
+            root.connectAfterPair = true;
+            root.connectAfterPairAttempts = 0;
             root.connecting = true;
-            Script.makeCall(device.connectToDevice(), connectCall => {
+            connectAfterPairTimer.restart();
+        }
+    }
+
+    function connectInputDeviceAfterPair() {
+        if (!connectAfterPair || !device || !Script.isInputDevice(device)) {
+            return;
+        }
+
+        if (device.connected) {
+            root.connectAfterPair = false;
+            root.connecting = false;
+            root.operationError = "";
+            return;
+        }
+
+        if (!device.paired) {
+            if (connectAfterPairAttempts < 8) {
+                connectAfterPairAttempts++;
+                connectAfterPairTimer.restart();
+            } else {
+                root.connectAfterPair = false;
                 root.connecting = false;
-                if (connectCall.error) {
-                    root.operationError = connectCall.errorText || i18n("Connecting failed");
-                }
-            });
+                root.operationError = i18n("Pairing finished, but the controller is not ready yet. Press a button on the controller, then try Connect.");
+            }
+            return;
+        }
+
+        root.connectAfterPair = false;
+        markInputDeviceTrusted();
+
+        const serial = beginOperation();
+        root.connecting = true;
+        Script.makeCall(device.connectToDevice(), connectCall => {
+            root.finishOperation(connectCall, i18n("Connecting failed"), false, serial);
+        });
+    }
+
+    Timer {
+        id: operationTimeoutTimer
+        interval: 30000
+        repeat: false
+        onTriggered: {
+            root.operationSerial++;
+            root.connecting = false;
+            root.disconnecting = false;
+            root.connectAfterPair = false;
+            root.operationError = i18n("The Bluetooth operation timed out. Keep the controller awake and try again.");
+        }
+    }
+
+    Timer {
+        id: connectAfterPairTimer
+        interval: 500
+        repeat: false
+        onTriggered: root.connectInputDeviceAfterPair()
+    }
+
+    Connections {
+        target: root.device
+        ignoreUnknownSignals: true
+
+        function onPairedChanged() {
+            root.connectInputDeviceAfterPair();
+        }
+
+        function onConnectedChanged() {
+            root.connectInputDeviceAfterPair();
         }
     }
 
@@ -121,19 +199,22 @@ Bigscreen.SidebarOverlay {
             onClicked: {
                 root.operationError = "";
                 if (!device.paired) {
+                    const serial = root.beginOperation();
                     root.connecting = true;
                     Script.makeCall(device.pair(), call => {
-                        root.finishOperation(call, i18n("Pairing failed"), true);
+                        root.finishOperation(call, i18n("Pairing failed"), true, serial);
                     });
                 } else if (device.connected) {
+                    const serial = root.beginOperation();
                     root.disconnecting = true;
                     Script.makeCall(device.disconnectFromDevice(), call => {
-                        root.finishOperation(call, i18n("Disconnecting failed"), false);
+                        root.finishOperation(call, i18n("Disconnecting failed"), false, serial);
                     });
                 } else {
+                    const serial = root.beginOperation();
                     root.connecting = true;
                     Script.makeCall(device.connectToDevice(), call => {
-                        root.finishOperation(call, i18n("Connecting failed"), false);
+                        root.finishOperation(call, i18n("Connecting failed"), false, serial);
                     });
                 }
             }
