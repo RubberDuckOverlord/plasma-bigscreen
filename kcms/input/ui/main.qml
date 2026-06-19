@@ -111,7 +111,7 @@ Bigscreen.ScrollablePage {
         Bigscreen.SwitchDelegate {
             id: inputEnabledDelegate
             text: i18n("System Navigation")
-            description: i18n("Navigate Bigscreen with controllers/remotes while apps and games can still use them directly")
+            description: i18n("Navigate Bigscreen with controllers/remotes while media apps and games can still use them directly")
             checked: kcm.enabled
             visible: kcm.serviceAvailable
 
@@ -179,7 +179,7 @@ Bigscreen.ScrollablePage {
         Bigscreen.SwitchDelegate {
             id: autoSuppressDelegate
             text: i18n("Automatic input suppression")
-            description: i18n("Pause Bigscreen navigation while Steam or another game is using a controller, then resume when you return")
+            description: i18n("Pause Bigscreen navigation while Kodi, Steam, or another app is using a controller, then resume when you return")
             checked: kcm.autoSuppressInput
             enabled: kcm.enabled && kcm.gameControllerEnabled
             visible: kcm.serviceAvailable && root.connectedGameControllers.length > 0

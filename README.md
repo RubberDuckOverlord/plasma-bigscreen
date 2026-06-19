@@ -47,6 +47,8 @@ usermod -aG input $USER
 
 Keyboard-like devices, including Flirc remotes configured to emit keyboard keys, are handled by Plasma Bigscreen as normal keyboard input and do not need to be opened by `plasma-bigscreen-inputhandler`. For the best out-of-box navigation experience, configure those devices to emit the same keys Bigscreen uses for controller actions, such as arrow keys for navigation, Enter for select, Escape for back, Tab/Shift+Tab for next/previous focus, and the system menu/home keys where available.
 
+Game controllers are shared with apps using an automatic handoff model. Bigscreen translates controller input into navigation keys while you are in the shell, web apps, or media apps that expect keyboard navigation. If an app such as Kodi, Steam, or a game opens the controller directly, Bigscreen pauses its own controller navigation and releases any pressed input so the app can own the controller without duplicate events. When the app releases the controller, Bigscreen navigation resumes.
+
 ### Test on a development machine
 
 It is recommended to use `kde-builder` to build this from source.

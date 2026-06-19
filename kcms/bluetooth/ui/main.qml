@@ -151,7 +151,7 @@ Bigscreen.ScrollablePage {
             id: readyControllersDelegate
             visible: kcm.inputHandlerAvailable && kcm.connectedGameControllerCount > 0
             text: i18np("%1 controller ready for Bigscreen", "%1 controllers ready for Bigscreen", kcm.connectedGameControllerCount)
-            description: i18n("Steam and games can use controllers directly. Bigscreen navigation pauses while another app is using them.")
+            description: i18n("Kodi, Steam, and games can use controllers directly. Bigscreen navigation pauses while another app is using them.")
             icon.name: "input-gamepad-symbolic"
 
             KeyNavigation.up: addControllerButton
