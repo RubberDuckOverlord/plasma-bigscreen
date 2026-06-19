@@ -250,6 +250,10 @@ bool InputHandlerDBus::sourceOwnedByOtherCallers(const QString &source, const QS
 
 void InputHandlerDBus::releaseBigscreenInputFocusForCaller(const QString &caller)
 {
+    if (m_bigscreenInputFocusWatcher && caller.startsWith(QLatin1Char(':'))) {
+        m_bigscreenInputFocusWatcher->removeWatchedService(caller);
+    }
+
     if (!m_sdlController) {
         m_bigscreenInputFocusSourcesByCaller.remove(caller);
         return;

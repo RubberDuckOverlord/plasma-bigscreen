@@ -6,6 +6,7 @@
 #include <QDBusInterface>
 #include <QDBusServiceWatcher>
 #include <QObject>
+#include <QSet>
 #include <qqmlregistration.h>
 
 class ControllerHandlerStatus : public QObject
@@ -68,6 +69,7 @@ private Q_SLOTS:
     void onGameControllerEnabledChanged(bool enabled);
 
 private:
+    void replayBigscreenInputFocusRequests();
     void updateConnectionStatus();
 
     QDBusInterface *m_dbusInterface = nullptr;
@@ -80,4 +82,5 @@ private:
     bool m_inputManuallySuppressed = false;
     bool m_enabled = true;
     bool m_gameControllerEnabled = true;
+    QSet<QString> m_requestedBigscreenInputFocusSources;
 };

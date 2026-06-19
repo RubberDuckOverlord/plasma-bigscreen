@@ -7,6 +7,8 @@
 #include <QDBusConnectionInterface>
 #include <QDBusReply>
 
+#include <utility>
+
 static const QString SERVICE = QStringLiteral("org.kde.plasma.bigscreen.inputhandler");
 static const QString PATH = QStringLiteral("/InputHandler");
 static const QString IFACE = QStringLiteral("org.kde.plasma.bigscreen.inputhandler");
@@ -61,6 +63,7 @@ void ControllerHandlerStatus::connectToService()
     Q_EMIT serviceAvailableChanged();
 
     updateConnectionStatus();
+    replayBigscreenInputFocusRequests();
 }
 
 void ControllerHandlerStatus::disconnectFromService()
@@ -184,15 +187,36 @@ bool ControllerHandlerStatus::isCecControllerConnected()
 
 void ControllerHandlerStatus::requestBigscreenInputFocus(const QString &source)
 {
-    if (m_dbusInterface && !source.isEmpty()) {
+    if (source.isEmpty()) {
+        return;
+    }
+
+    m_requestedBigscreenInputFocusSources.insert(source);
+    if (m_dbusInterface) {
         m_dbusInterface->asyncCall(QStringLiteral("requestBigscreenInputFocus"), source);
     }
 }
 
 void ControllerHandlerStatus::releaseBigscreenInputFocus(const QString &source)
 {
-    if (m_dbusInterface && !source.isEmpty()) {
+    if (source.isEmpty()) {
+        return;
+    }
+
+    m_requestedBigscreenInputFocusSources.remove(source);
+    if (m_dbusInterface) {
         m_dbusInterface->asyncCall(QStringLiteral("releaseBigscreenInputFocus"), source);
+    }
+}
+
+void ControllerHandlerStatus::replayBigscreenInputFocusRequests()
+{
+    if (!m_dbusInterface) {
+        return;
+    }
+
+    for (const QString &source : std::as_const(m_requestedBigscreenInputFocusSources)) {
+        m_dbusInterface->asyncCall(QStringLiteral("requestBigscreenInputFocus"), source);
     }
 }
 

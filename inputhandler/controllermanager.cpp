@@ -21,6 +21,15 @@ ControllerManager::ControllerManager(QObject *parent)
     m_startButtonDisabledWhenSuppressedControllers =
         QSet<QString>(startButtonDisabledWhenSuppressedControllers.cbegin(), startButtonDisabledWhenSuppressedControllers.cend());
 
+    m_displayOffWakeSwallowTimer.setSingleShot(true);
+    m_displayOffWakeSwallowTimer.setInterval(DISPLAY_OFF_WAKE_SWALLOW_TIMEOUT);
+    connect(&m_displayOffWakeSwallowTimer, &QTimer::timeout, this, [this]() {
+        if (m_swallowNextDisplayOffInput) {
+            qDebug() << "Display-off wake input swallow window expired";
+            m_swallowNextDisplayOffInput = false;
+        }
+    });
+
     resetInputSystem();
 }
 
@@ -400,6 +409,7 @@ void ControllerManager::prepareForDisplayOffWake()
 {
     qDebug() << "Preparing to swallow the next display-off wake input";
     m_swallowNextDisplayOffInput = true;
+    m_displayOffWakeSwallowTimer.start();
 }
 
 QVariantList ControllerManager::connectedControllers() const
@@ -460,6 +470,7 @@ bool ControllerManager::consumeDisplayOffWakeInput(Device *device)
     }
 
     m_swallowNextDisplayOffInput = false;
+    m_displayOffWakeSwallowTimer.stop();
     qDebug() << "Swallowed display-off wake input from" << device->getName();
     return true;
 }

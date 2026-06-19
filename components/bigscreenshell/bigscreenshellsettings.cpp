@@ -182,8 +182,10 @@ void BigscreenShellSettings::applyPowerDevilPowerButtonSetting(bool enabled, KCo
                 settingsGroup.writeEntry(previousActionKey, previousAction);
             }
 
-            handleButtonEventsGroup.writeEntry("powerButtonAction", POWERDEVIL_TURN_OFF_SCREEN_ACTION);
-            changed = true;
+            if (handleButtonEventsGroup.readEntry("powerButtonAction", POWERDEVIL_PROMPT_LOGOUT_DIALOG_ACTION) != POWERDEVIL_TURN_OFF_SCREEN_ACTION) {
+                handleButtonEventsGroup.writeEntry("powerButtonAction", POWERDEVIL_TURN_OFF_SCREEN_ACTION);
+                changed = true;
+            }
             continue;
         }
 
@@ -192,9 +194,11 @@ void BigscreenShellSettings::applyPowerDevilPowerButtonSetting(bool enabled, KCo
         }
 
         const int previousAction = settingsGroup.readEntry(previousActionKey, POWERDEVIL_PROMPT_LOGOUT_DIALOG_ACTION);
-        handleButtonEventsGroup.writeEntry("powerButtonAction", previousAction);
+        if (handleButtonEventsGroup.readEntry("powerButtonAction", POWERDEVIL_PROMPT_LOGOUT_DIALOG_ACTION) != previousAction) {
+            handleButtonEventsGroup.writeEntry("powerButtonAction", previousAction);
+            changed = true;
+        }
         settingsGroup.deleteEntry(previousActionKey);
-        changed = true;
     }
 
     if (!changed) {
@@ -234,9 +238,15 @@ void BigscreenShellSettings::applyPowerDevilAutomaticScreenOffSetting(bool enabl
                 }
             }
 
-            dpmsGroup.writeEntry("idleTime", minutes * 60);
-            dpmsGroup.writeEntry("lockBeforeTurnOff", false);
-            changed = true;
+            const int desiredIdleTime = minutes * 60;
+            if (dpmsGroup.readEntry("idleTime", 0) != desiredIdleTime) {
+                dpmsGroup.writeEntry("idleTime", desiredIdleTime);
+                changed = true;
+            }
+            if (dpmsGroup.readEntry("lockBeforeTurnOff", true)) {
+                dpmsGroup.writeEntry("lockBeforeTurnOff", false);
+                changed = true;
+            }
             continue;
         }
 
@@ -245,22 +255,35 @@ void BigscreenShellSettings::applyPowerDevilAutomaticScreenOffSetting(bool enabl
         }
 
         if (settingsGroup.readEntry(previousIdleTimePresentKey, false)) {
-            dpmsGroup.writeEntry("idleTime", settingsGroup.readEntry(previousIdleTimeKey, 0));
+            const int previousIdleTime = settingsGroup.readEntry(previousIdleTimeKey, 0);
+            if (dpmsGroup.readEntry("idleTime", 0) != previousIdleTime) {
+                dpmsGroup.writeEntry("idleTime", previousIdleTime);
+                changed = true;
+            }
         } else {
-            dpmsGroup.deleteEntry("idleTime");
+            if (dpmsGroup.hasKey(QStringLiteral("idleTime"))) {
+                dpmsGroup.deleteEntry("idleTime");
+                changed = true;
+            }
         }
 
         if (settingsGroup.readEntry(previousLockBeforeTurnOffPresentKey, false)) {
-            dpmsGroup.writeEntry("lockBeforeTurnOff", settingsGroup.readEntry(previousLockBeforeTurnOffKey, false));
+            const bool previousLockBeforeTurnOff = settingsGroup.readEntry(previousLockBeforeTurnOffKey, false);
+            if (dpmsGroup.readEntry("lockBeforeTurnOff", false) != previousLockBeforeTurnOff) {
+                dpmsGroup.writeEntry("lockBeforeTurnOff", previousLockBeforeTurnOff);
+                changed = true;
+            }
         } else {
-            dpmsGroup.deleteEntry("lockBeforeTurnOff");
+            if (dpmsGroup.hasKey(QStringLiteral("lockBeforeTurnOff"))) {
+                dpmsGroup.deleteEntry("lockBeforeTurnOff");
+                changed = true;
+            }
         }
 
         settingsGroup.deleteEntry(previousIdleTimePresentKey);
         settingsGroup.deleteEntry(previousIdleTimeKey);
         settingsGroup.deleteEntry(previousLockBeforeTurnOffPresentKey);
         settingsGroup.deleteEntry(previousLockBeforeTurnOffKey);
-        changed = true;
     }
 
     if (!changed) {

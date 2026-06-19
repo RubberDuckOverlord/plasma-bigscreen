@@ -12,6 +12,7 @@
 #include <QScopedPointer>
 #include <QSet>
 #include <QString>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -94,5 +95,8 @@ private:
     QHash<Device *, QSet<int>> m_pressedPointerButtons;
     QSet<int> m_pressedKeysWithoutDevice;
     QSet<int> m_pressedPointerButtonsWithoutDevice;
+    QTimer m_displayOffWakeSwallowTimer;
     bool m_swallowNextDisplayOffInput = false;
+
+    static constexpr int DISPLAY_OFF_WAKE_SWALLOW_TIMEOUT = 30000;
 };

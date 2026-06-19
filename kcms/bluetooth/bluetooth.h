@@ -50,6 +50,7 @@ private:
     bool m_inputHandlerAvailable = false;
     bool m_inputControllerUpdateScheduled = false;
     bool m_inputControllerReplyPending = false;
+    bool m_inputControllerUpdatePending = false;
     int m_inputControllerRequestSerial = 0;
     QVariantList m_connectedInputControllers;
     QDBusServiceWatcher *m_inputHandlerWatcher = nullptr;

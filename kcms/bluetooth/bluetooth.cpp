@@ -202,20 +202,18 @@ bool Bluetooth::hasConnectedInputControllerForDevice(BluezQt::DevicePtr device) 
         return false;
     }
 
-    int connectedGameControllerCount = 0;
     for (const QVariant &controller : m_connectedInputControllers) {
         const QVariantMap controllerMap = controller.toMap();
         if (controllerMap.value(QStringLiteral("type")).toString() != QStringLiteral("gameController")) {
             continue;
         }
 
-        connectedGameControllerCount++;
         if (controllerMatchesDevice(controllerMap, device)) {
             return true;
         }
     }
 
-    return connectedGameControllerCount == 1;
+    return false;
 }
 
 void Bluetooth::connectToInputHandler()
@@ -242,6 +240,7 @@ void Bluetooth::connectToInputHandler()
 void Bluetooth::disconnectFromInputHandler()
 {
     m_inputControllerReplyPending = false;
+    m_inputControllerUpdatePending = false;
     m_inputControllerRequestSerial++;
 
     if (m_inputHandlerInterface) {
@@ -262,6 +261,11 @@ void Bluetooth::disconnectFromInputHandler()
 
 void Bluetooth::scheduleInputControllerUpdate()
 {
+    if (m_inputControllerReplyPending) {
+        m_inputControllerUpdatePending = true;
+        return;
+    }
+
     if (m_inputControllerUpdateScheduled) {
         return;
     }
@@ -277,7 +281,12 @@ void Bluetooth::updateInputControllers()
 {
     m_inputControllerUpdateScheduled = false;
 
-    if (!m_inputHandlerInterface || m_inputControllerReplyPending) {
+    if (!m_inputHandlerInterface) {
+        return;
+    }
+
+    if (m_inputControllerReplyPending) {
+        m_inputControllerUpdatePending = true;
         return;
     }
 
@@ -305,6 +314,11 @@ void Bluetooth::updateInputControllers()
         if (m_connectedInputControllers != connectedControllers) {
             m_connectedInputControllers = connectedControllers;
             Q_EMIT connectedInputControllersChanged();
+        }
+
+        if (m_inputControllerUpdatePending) {
+            m_inputControllerUpdatePending = false;
+            scheduleInputControllerUpdate();
         }
     });
 }
