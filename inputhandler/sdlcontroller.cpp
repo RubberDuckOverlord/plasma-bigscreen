@@ -69,6 +69,9 @@ static QStringList relatedInputDevicePaths(const QString &devicePath)
         return {};
     }
 
+    // SDL may give us one node while apps open another node for the same controller.
+    // Watch the resolved path and any sibling event/js nodes so handoff works with Steam,
+    // Kodi, and games that bypass SDL's chosen path.
     QSet<QString> paths{devicePath};
     const QString canonicalDevicePath = QFileInfo(devicePath).canonicalFilePath();
     if (!canonicalDevicePath.isEmpty()) {
@@ -509,6 +512,8 @@ void SdlController::requestBigscreenInputFocus(const QString &source)
 
     m_bigscreenInputFocusSources.insert(source);
     qInfo() << "Bigscreen input focus requested by" << source;
+    // Explicit Bigscreen focus wins over background app ownership. Steam can keep
+    // a controller open after returning home, and the shell still needs navigation.
     if (!m_manualSuppressInput) {
         if (m_autoUnsuppressTimer) {
             m_autoUnsuppressTimer->stop();
@@ -533,6 +538,8 @@ void SdlController::updateAutomaticSuppression()
         return;
     }
 
+    // Auto suppression is only for the gap where an app owns the controller and
+    // no Bigscreen surface is asking for navigation input.
     const bool shouldSuppress = m_autoSuppressInput && m_bigscreenInputFocusSources.isEmpty() && m_deviceWatcher->hasOtherProcesses();
     if (shouldSuppress) {
         if (m_autoUnsuppressTimer) {
@@ -878,6 +885,8 @@ void SdlDevice::setKey(InputAction action, int key, bool pressed)
 
 void SdlDevice::setDirectionalAction(int newDirection, int &currentDirection, InputAction negativeAction, InputAction positiveAction)
 {
+    // Analog axes become key-like press/release pairs. Tracking the previous
+    // direction prevents repeated key presses while the stick is held.
     if (m_controller->isSuppressInput() && !inputAllowedWhileSuppressed(negativeAction) && !inputAllowedWhileSuppressed(positiveAction)) {
         currentDirection = 0;
         return;

@@ -65,6 +65,7 @@ Bigscreen.ScrollablePage {
             return;
         }
 
+        // Discovery is intentionally bounded; continuous scans are noisy on small systems.
         discoveryError = "";
         discoveryStopTimer.restart();
         if (discovering) {
@@ -89,6 +90,7 @@ Bigscreen.ScrollablePage {
     }
 
     function openDeviceSidebar(device, focusDelegate, autoConnectOnOpen) {
+        // Pairing/connecting is a focused task, so stop scanning while the sidebar is open.
         stopDiscovery();
         sidebarOverlay.delegate = focusDelegate;
         sidebarOverlay.autoConnectOnOpen = autoConnectOnOpen || false;
@@ -127,6 +129,7 @@ Bigscreen.ScrollablePage {
 
     Timer {
         id: discoveryStopTimer
+        // Long enough for pairing mode, short enough to avoid leaving discovery running.
         interval: 60000
         repeat: false
         onTriggered: bluetoothView.stopDiscovery()

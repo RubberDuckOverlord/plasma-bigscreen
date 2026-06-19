@@ -408,6 +408,8 @@ void ControllerManager::setStartButtonEnabledWhenSuppressed(const QString &uniqu
 void ControllerManager::prepareForDisplayOffWake()
 {
     qDebug() << "Preparing to swallow the next display-off wake input";
+    // The button that wakes the TV should not also activate the focused UI item.
+    // Keep this armed briefly so a failed display-off request cannot eat input later.
     m_swallowNextDisplayOffInput = true;
     m_displayOffWakeSwallowTimer.start();
 }

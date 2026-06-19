@@ -158,6 +158,8 @@ void DeviceWatcher::updateRecheckTimer()
 
 bool DeviceWatcher::isDeviceOpenByOthers() const
 {
+    // This scan only runs after inotify activity or on a slow recheck timer, so
+    // it avoids a constant /proc walk while still catching apps that keep fds open.
     QDir procDir(QStringLiteral("/proc"));
     const auto entries = procDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
 

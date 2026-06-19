@@ -107,6 +107,7 @@ Bigscreen.SidebarOverlay {
     }
 
     function resetTransientOperationState(clearAutoConnect) {
+        // Invalidate callbacks from pair/connect/disconnect calls after the sidebar closes.
         operationSerial++;
         operationTimeoutTimer.stop();
         connectAfterPairTimer.stop();
@@ -131,6 +132,7 @@ Bigscreen.SidebarOverlay {
         }
 
         autoConnectOnOpen = false;
+        // Known controllers are opened from the "Add game controller" flow to reconnect now.
         if (device && Script.isInputDevice(device) && device.paired && !device.connected && !connecting && !disconnecting) {
             operationError = "";
             startDeviceConnection(false);
@@ -201,6 +203,7 @@ Bigscreen.SidebarOverlay {
         }
 
         const errorText = call.errorText ? call.errorText.toLowerCase() : "";
+        // Controllers often fail once while waking up; retry those transient failures only.
         return !errorText.includes("authentication")
             && !errorText.includes("not paired")
             && !errorText.includes("rejected")

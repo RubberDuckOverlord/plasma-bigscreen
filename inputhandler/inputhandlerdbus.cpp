@@ -196,6 +196,8 @@ void InputHandlerDBus::requestBigscreenInputFocus(const QString &source)
         return;
     }
 
+    // Focus is source-scoped and caller-owned. A homescreen token should not
+    // clear a settings token, and a crashed caller must not leave input pinned.
     if (sources.isEmpty() && m_bigscreenInputFocusWatcher && caller.startsWith(QLatin1Char(':'))) {
         m_bigscreenInputFocusWatcher->addWatchedService(caller);
     }

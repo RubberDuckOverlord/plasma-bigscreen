@@ -191,6 +191,8 @@ void ControllerHandlerStatus::requestBigscreenInputFocus(const QString &source)
         return;
     }
 
+    // QML surfaces can request focus before inputhandler is ready. Keep the
+    // desired state locally so reconnecting to the service restores navigation.
     m_requestedBigscreenInputFocusSources.insert(source);
     if (m_dbusInterface) {
         m_dbusInterface->asyncCall(QStringLiteral("requestBigscreenInputFocus"), source);
