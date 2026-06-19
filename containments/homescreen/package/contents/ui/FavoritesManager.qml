@@ -11,6 +11,7 @@ import QtQuick.Controls as Controls
 
 import org.kde.kirigami as Kirigami
 import org.kde.bigscreen as Bigscreen
+import org.kde.bigscreen.controllerhandler as ControllerHandler
 import org.kde.private.biglauncher
 import org.kde.layershell as LayerShell
 import org.kde.plasma.plasmoid
@@ -30,10 +31,12 @@ Window {
     function showOverlay() {
         favsContainerAddSection.positionViewAtBeginning();
         favsContainerRemoveSection.positionViewAtBeginning();
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
         root.showFullScreen();
     }
 
     function hideOverlay() {
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
         root.close();
     }
 

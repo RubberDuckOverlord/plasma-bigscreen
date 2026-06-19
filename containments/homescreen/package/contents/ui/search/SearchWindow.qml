@@ -11,6 +11,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.private.nanoshell as NanoShell
 
 import org.kde.milou as Milou
+import org.kde.bigscreen.controllerhandler as ControllerHandler
 import org.kde.kirigami as Kirigami
 import org.kde.layershell as LayerShell
 
@@ -27,10 +28,12 @@ Window {
 
     function showOverlay() {
         queryField.clear();
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
         root.showFullScreen();
     }
 
     function hideOverlay() {
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
         root.close();
     }
 

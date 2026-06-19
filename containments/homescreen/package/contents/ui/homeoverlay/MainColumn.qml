@@ -17,6 +17,7 @@ ColumnLayout {
 
     property bool showTasksButton
     property bool closeControllerSuppressState
+    property bool retainBigscreenInputFocus
 
     signal minimizeAllTasksRequested()
     signal searchRequested()
@@ -30,14 +31,24 @@ ColumnLayout {
         tasksButton.forceActiveFocus();
     }
 
+    function beginBigscreenInputFocus() {
+        retainBigscreenInputFocus = false;
+        closeControllerSuppressState = ControllerHandler.ControllerHandlerStatus.inputSuppressed;
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
+    }
+
+    function endBigscreenInputFocus() {
+        if (!retainBigscreenInputFocus) {
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+        }
+    }
+
     onVisibleChanged: {
         if (visible) {
             homeButton.forceActiveFocus();
-
-            closeControllerSuppressState = ControllerHandler.ControllerHandlerStatus.inputSuppressed;
-            ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
-        } else if (closeControllerSuppressState) {
-            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+            beginBigscreenInputFocus();
+        } else {
+            endBigscreenInputFocus();
         }
     }
 
@@ -125,6 +136,7 @@ ColumnLayout {
                 icon.name: "go-home-symbolic"
                 onClicked: {
                     closeControllerSuppressState = false;
+                    retainBigscreenInputFocus = true;
                     ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
                     root.minimizeAllTasksRequested();
                 }
@@ -182,6 +194,7 @@ ColumnLayout {
                 checked: !root.closeControllerSuppressState
                 onCheckedChanged: {
                     root.closeControllerSuppressState = !checked;
+                    root.retainBigscreenInputFocus = checked;
                     if (checked) {
                         ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
                     } else {
