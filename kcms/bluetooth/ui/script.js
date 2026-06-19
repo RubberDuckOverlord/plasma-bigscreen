@@ -78,6 +78,10 @@ function isInputDevice(device) {
         return false;
     }
 
+    if (isLikelyControllerName(device.name)) {
+        return true;
+    }
+
     switch (device.type) {
         case BluezQt.Device.Keyboard:
         case BluezQt.Device.Mouse:
@@ -88,6 +92,26 @@ function isInputDevice(device) {
         default:
             return device.uuids && device.uuids.includes(BluezQt.Services.HumanInterfaceDevice);
     }
+}
+
+function isLikelyControllerName(name) {
+    if (!name) {
+        return false;
+    }
+
+    const normalizedName = name.toLowerCase();
+    return normalizedName.includes("controller")
+        || normalizedName.includes("gamepad")
+        || normalizedName.includes("xbox")
+        || normalizedName.includes("dualsense")
+        || normalizedName.includes("dualshock")
+        || normalizedName.includes("playstation")
+        || normalizedName.includes("wireless controller")
+        || normalizedName.includes("steam")
+        || normalizedName.includes("joy-con")
+        || normalizedName.includes("8bitdo")
+        || normalizedName.includes("stadia")
+        || normalizedName.includes("luna");
 }
 
 function controllerPairingHint(device) {

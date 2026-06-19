@@ -24,8 +24,10 @@ Bigscreen.SidebarOverlay {
     property string operationError: ""
     property bool connectAfterPair: false
     property int connectAfterPairAttempts: 0
+    property int inputConnectionRetryAttempts: 0
     property int inputReadinessRefreshAttempts: 0
     property int operationSerial: 0
+    readonly property int maxInputConnectionRetryAttempts: 2
 
     function operationStatusText() {
         if (operationError) {
@@ -74,6 +76,18 @@ Bigscreen.SidebarOverlay {
         }
     }
 
+    function prepareInputDeviceConnection() {
+        if (!device || !Script.isInputDevice(device)) {
+            return;
+        }
+
+        if (device.blocked) {
+            device.blocked = false;
+        }
+
+        markInputDeviceTrusted();
+    }
+
     function beginOperation() {
         operationSerial++;
         operationTimeoutTimer.restart();
@@ -101,11 +115,14 @@ Bigscreen.SidebarOverlay {
         root.disconnecting = false;
 
         if (call.error) {
+            inputConnectionRetryTimer.stop();
+            root.inputConnectionRetryAttempts = 0;
             root.operationError = call.errorText || fallbackError;
             return;
         }
 
         root.operationError = "";
+        root.inputConnectionRetryAttempts = 0;
         markInputDeviceTrusted();
         refreshInputReadiness();
 
@@ -143,13 +160,52 @@ Bigscreen.SidebarOverlay {
         }
 
         root.connectAfterPair = false;
-        markInputDeviceTrusted();
+        startDeviceConnection(false);
+    }
 
+    function inputConnectionFailureRetryable(call) {
+        if (!call.error || !device || !Script.isInputDevice(device) || !device.paired || device.connected) {
+            return false;
+        }
+
+        const errorText = call.errorText ? call.errorText.toLowerCase() : "";
+        return !errorText.includes("authentication")
+            && !errorText.includes("not paired")
+            && !errorText.includes("rejected")
+            && !errorText.includes("canceled")
+            && !errorText.includes("cancelled");
+    }
+
+    function startDeviceConnection(retry) {
+        if (!device) {
+            return;
+        }
+
+        if (!retry) {
+            root.inputConnectionRetryAttempts = 0;
+        }
+
+        prepareInputDeviceConnection();
         const serial = beginOperation();
         root.connecting = true;
         Script.makeCall(device.connectToDevice(), connectCall => {
-            root.finishOperation(connectCall, i18n("Connecting failed"), false, serial);
+            root.finishConnectionOperation(connectCall, serial);
         });
+    }
+
+    function finishConnectionOperation(call, serial) {
+        if (serial !== operationSerial) {
+            return;
+        }
+
+        if (inputConnectionFailureRetryable(call) && root.inputConnectionRetryAttempts < root.maxInputConnectionRetryAttempts) {
+            root.inputConnectionRetryAttempts++;
+            root.operationError = i18n("Connection did not complete. Press a controller button; retrying…");
+            inputConnectionRetryTimer.restart();
+            return;
+        }
+
+        root.finishOperation(call, i18n("Connecting failed"), false, serial);
     }
 
     Timer {
@@ -161,6 +217,8 @@ Bigscreen.SidebarOverlay {
             root.connecting = false;
             root.disconnecting = false;
             root.connectAfterPair = false;
+            root.inputConnectionRetryAttempts = 0;
+            inputConnectionRetryTimer.stop();
             root.operationError = i18n("The Bluetooth operation timed out. Keep the controller awake and try again.");
         }
     }
@@ -170,6 +228,20 @@ Bigscreen.SidebarOverlay {
         interval: 500
         repeat: false
         onTriggered: root.connectInputDeviceAfterPair()
+    }
+
+    Timer {
+        id: inputConnectionRetryTimer
+        interval: 900
+        repeat: false
+        onTriggered: {
+            if (!device || !root.connecting || device.connected) {
+                root.inputConnectionRetryAttempts = 0;
+                return;
+            }
+
+            root.startDeviceConnection(true);
+        }
     }
 
     Timer {
@@ -198,13 +270,21 @@ Bigscreen.SidebarOverlay {
         }
 
         function onConnectedChanged() {
+            if (device && device.connected) {
+                inputConnectionRetryTimer.stop();
+                root.inputConnectionRetryAttempts = 0;
+            }
             root.connectInputDeviceAfterPair();
             root.resetInputReadinessPolling();
         }
     }
 
     onOpened: resetInputReadinessPolling()
-    onDeviceChanged: inputReadinessRefreshAttempts = 0
+    onDeviceChanged: {
+        inputConnectionRetryTimer.stop();
+        inputConnectionRetryAttempts = 0;
+        inputReadinessRefreshAttempts = 0;
+    }
 
     header: Bigscreen.SidebarOverlayHeader {
         iconSource: device ? device.icon : ""
@@ -242,6 +322,7 @@ Bigscreen.SidebarOverlay {
                 if (!device.paired) {
                     const serial = root.beginOperation();
                     root.connecting = true;
+                    root.prepareInputDeviceConnection();
                     Script.makeCall(device.pair(), call => {
                         root.finishOperation(call, i18n("Pairing failed"), true, serial);
                     });
@@ -252,11 +333,7 @@ Bigscreen.SidebarOverlay {
                         root.finishOperation(call, i18n("Disconnecting failed"), false, serial);
                     });
                 } else {
-                    const serial = root.beginOperation();
-                    root.connecting = true;
-                    Script.makeCall(device.connectToDevice(), call => {
-                        root.finishOperation(call, i18n("Connecting failed"), false, serial);
-                    });
+                    root.startDeviceConnection(false);
                 }
             }
         }
