@@ -11,6 +11,7 @@
 #include <QDBusArgument>
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
+#include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusVariant>
 #include <QDebug>
@@ -240,6 +241,9 @@ void Bluetooth::connectToInputHandler()
 
 void Bluetooth::disconnectFromInputHandler()
 {
+    m_inputControllerReplyPending = false;
+    m_inputControllerRequestSerial++;
+
     if (m_inputHandlerInterface) {
         delete m_inputHandlerInterface;
         m_inputHandlerInterface = nullptr;
@@ -273,24 +277,36 @@ void Bluetooth::updateInputControllers()
 {
     m_inputControllerUpdateScheduled = false;
 
-    if (!m_inputHandlerInterface) {
+    if (!m_inputHandlerInterface || m_inputControllerReplyPending) {
         return;
     }
 
-    QDBusPendingReply<QVariantList> reply = m_inputHandlerInterface->connectedControllers();
-    reply.waitForFinished();
+    m_inputControllerReplyPending = true;
+    const int requestSerial = ++m_inputControllerRequestSerial;
+    auto *watcher = new QDBusPendingCallWatcher(m_inputHandlerInterface->connectedControllers(), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, requestSerial](QDBusPendingCallWatcher *watcher) {
+        m_inputControllerReplyPending = false;
 
-    QVariantList connectedControllers;
-    if (!reply.isError()) {
-        connectedControllers = controllerListFromDBusReply(reply.value());
-    } else {
-        qWarning() << "Failed to fetch connected input controllers:" << reply.error().message();
-    }
+        if (!m_inputHandlerInterface || requestSerial != m_inputControllerRequestSerial) {
+            watcher->deleteLater();
+            return;
+        }
 
-    if (m_connectedInputControllers != connectedControllers) {
-        m_connectedInputControllers = connectedControllers;
-        Q_EMIT connectedInputControllersChanged();
-    }
+        QDBusPendingReply<QVariantList> reply = *watcher;
+        watcher->deleteLater();
+
+        QVariantList connectedControllers;
+        if (!reply.isError()) {
+            connectedControllers = controllerListFromDBusReply(reply.value());
+        } else {
+            qWarning() << "Failed to fetch connected input controllers:" << reply.error().message();
+        }
+
+        if (m_connectedInputControllers != connectedControllers) {
+            m_connectedInputControllers = connectedControllers;
+            Q_EMIT connectedInputControllersChanged();
+        }
+    });
 }
 
 QString Bluetooth::controllerFamilyForDevice(BluezQt::DevicePtr device) const

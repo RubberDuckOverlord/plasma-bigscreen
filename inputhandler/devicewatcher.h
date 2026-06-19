@@ -36,6 +36,7 @@ Q_SIGNALS:
 private:
     void onInotifyEvent();
     void checkDeviceAccess();
+    void updateRecheckTimer();
     bool isDeviceOpenByOthers() const;
 
     int m_inotifyFd = -1;
@@ -46,5 +47,7 @@ private:
     bool m_othersUsingDevice = false;
     qint64 m_myPid;
 
+    static constexpr int IDLE_RECHECK_INTERVAL = 10000;
+    static constexpr int ACTIVE_RECHECK_INTERVAL = 2000;
     static const QSet<QString> s_ignoredProcesses;
 };

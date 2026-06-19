@@ -24,6 +24,7 @@ Bigscreen.SidebarOverlay {
     property string operationError: ""
     property bool connectAfterPair: false
     property int connectAfterPairAttempts: 0
+    property int inputReadinessRefreshAttempts: 0
     property int operationSerial: 0
 
     function operationStatusText() {
@@ -85,6 +86,11 @@ Bigscreen.SidebarOverlay {
         }
     }
 
+    function resetInputReadinessPolling() {
+        inputReadinessRefreshAttempts = 0;
+        refreshInputReadiness();
+    }
+
     function finishOperation(call, fallbackError, connectAfterSuccess, serial) {
         if (serial !== operationSerial) {
             return;
@@ -120,7 +126,7 @@ Bigscreen.SidebarOverlay {
             root.connectAfterPair = false;
             root.connecting = false;
             root.operationError = "";
-            root.refreshInputReadiness();
+            root.resetInputReadinessPolling();
             return;
         }
 
@@ -170,8 +176,17 @@ Bigscreen.SidebarOverlay {
         id: inputReadinessRefreshTimer
         interval: 1000
         repeat: true
-        running: root.opened && device && Script.isInputDevice(device) && device.connected && kcm.inputHandlerAvailable && !kcm.hasConnectedInputControllerForDevice(device)
-        onTriggered: root.refreshInputReadiness()
+        running: root.opened
+            && device
+            && Script.isInputDevice(device)
+            && device.connected
+            && kcm.inputHandlerAvailable
+            && !kcm.hasConnectedInputControllerForDevice(device)
+            && root.inputReadinessRefreshAttempts < 20
+        onTriggered: {
+            root.inputReadinessRefreshAttempts++;
+            root.refreshInputReadiness();
+        }
     }
 
     Connections {
@@ -184,9 +199,12 @@ Bigscreen.SidebarOverlay {
 
         function onConnectedChanged() {
             root.connectInputDeviceAfterPair();
-            root.refreshInputReadiness();
+            root.resetInputReadinessPolling();
         }
     }
+
+    onOpened: resetInputReadinessPolling()
+    onDeviceChanged: inputReadinessRefreshAttempts = 0
 
     header: Bigscreen.SidebarOverlayHeader {
         iconSource: device ? device.icon : ""
