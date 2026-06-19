@@ -953,21 +953,23 @@ void SdlGamepadDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
     int value = event.value;
     auto axis = static_cast<SDL_GamepadAxis>(event.axis);
 
+    // SDL reports left/right as negative/positive X.
     if (axis == SDL_GAMEPAD_AXIS_LEFTX) {
         int newDirection = 0;
         if (value > AXIS_THRESHOLD) {
-            newDirection = 1;
+            newDirection = 1; // Right
         } else if (value < -AXIS_THRESHOLD) {
-            newDirection = -1;
+            newDirection = -1; // Left
         }
         setDirectionalAction(newDirection, m_axisLeftXDirection, InputAction::NavigateLeft, InputAction::NavigateRight);
     }
+    // SDL reports up/down as negative/positive Y.
     else if (axis == SDL_GAMEPAD_AXIS_LEFTY) {
         int newDirection = 0;
         if (value > AXIS_THRESHOLD) {
-            newDirection = 1;
+            newDirection = 1; // Down
         } else if (value < -AXIS_THRESHOLD) {
-            newDirection = -1;
+            newDirection = -1; // Up
         }
         setDirectionalAction(newDirection, m_axisLeftYDirection, InputAction::NavigateUp, InputAction::NavigateDown);
     }
@@ -1004,20 +1006,21 @@ void SdlJoystickDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
 {
     const int value = event.value;
 
+    // Generic joystick axes usually follow the same X/Y sign convention as SDL gamepads.
     if (event.axis == 0) {
         int newDirection = 0;
         if (value > AXIS_THRESHOLD) {
-            newDirection = 1;
+            newDirection = 1; // Right
         } else if (value < -AXIS_THRESHOLD) {
-            newDirection = -1;
+            newDirection = -1; // Left
         }
         setDirectionalAction(newDirection, m_axisLeftXDirection, InputAction::NavigateLeft, InputAction::NavigateRight);
     } else if (event.axis == 1) {
         int newDirection = 0;
         if (value > AXIS_THRESHOLD) {
-            newDirection = 1;
+            newDirection = 1; // Down
         } else if (value < -AXIS_THRESHOLD) {
-            newDirection = -1;
+            newDirection = -1; // Up
         }
         setDirectionalAction(newDirection, m_axisLeftYDirection, InputAction::NavigateUp, InputAction::NavigateDown);
     } else if (event.axis == 2) {
