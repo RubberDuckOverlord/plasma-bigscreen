@@ -173,6 +173,18 @@ QVariantList Bluetooth::connectedInputControllers() const
     return m_connectedInputControllers;
 }
 
+int Bluetooth::connectedGameControllerCount() const
+{
+    int count = 0;
+    for (const QVariant &controller : m_connectedInputControllers) {
+        const QVariantMap controllerMap = controller.toMap();
+        if (controllerMap.value(QStringLiteral("type")).toString() == QStringLiteral("gameController")) {
+            count++;
+        }
+    }
+    return count;
+}
+
 void Bluetooth::refreshInputControllers()
 {
     updateInputControllers();
@@ -180,13 +192,7 @@ void Bluetooth::refreshInputControllers()
 
 bool Bluetooth::hasAnyConnectedGameController() const
 {
-    for (const QVariant &controller : m_connectedInputControllers) {
-        const QVariantMap controllerMap = controller.toMap();
-        if (controllerMap.value(QStringLiteral("type")).toString() == QStringLiteral("gameController")) {
-            return true;
-        }
-    }
-    return false;
+    return connectedGameControllerCount() > 0;
 }
 
 bool Bluetooth::hasConnectedInputControllerForDevice(BluezQt::DevicePtr device) const

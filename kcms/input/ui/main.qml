@@ -111,7 +111,7 @@ Bigscreen.ScrollablePage {
         Bigscreen.SwitchDelegate {
             id: inputEnabledDelegate
             text: i18n("System Navigation")
-            description: i18n("Navigate the system interface with connected controllers/remotes (apps can always still use them directly)")
+            description: i18n("Navigate Bigscreen with controllers/remotes while apps and games can still use them directly")
             checked: kcm.enabled
             visible: kcm.serviceAvailable
 
@@ -159,7 +159,7 @@ Bigscreen.ScrollablePage {
         Bigscreen.SwitchDelegate {
             id: gameControllerDelegate
             text: i18n("Game controllers")
-            description: i18n("Use connected game controllers for system navigation")
+            description: i18n("Use connected game controllers for Bigscreen navigation")
             checked: kcm.gameControllerEnabled
             enabled: kcm.enabled
             visible: kcm.serviceAvailable && root.connectedGameControllers.length > 0
@@ -179,7 +179,7 @@ Bigscreen.ScrollablePage {
         Bigscreen.SwitchDelegate {
             id: autoSuppressDelegate
             text: i18n("Automatic input suppression")
-            description: i18n("Stop controller navigation while another app is using a controller")
+            description: i18n("Pause Bigscreen navigation while Steam or another game is using a controller")
             checked: kcm.autoSuppressInput
             enabled: kcm.enabled && kcm.gameControllerEnabled
             visible: kcm.serviceAvailable && root.connectedGameControllers.length > 0

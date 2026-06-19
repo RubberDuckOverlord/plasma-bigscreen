@@ -139,12 +139,23 @@ Bigscreen.ScrollablePage {
             enabled: bluetoothView.bluetoothReady
 
             KeyNavigation.up: bluetoothToggle
-            KeyNavigation.down: scanButton
+            KeyNavigation.down: readyControllersDelegate.visible ? readyControllersDelegate : scanButton
 
             onClicked: {
                 bluetoothView.startDiscovery();
                 controllerSetupDialog.open();
             }
+        }
+
+        Bigscreen.TextDelegate {
+            id: readyControllersDelegate
+            visible: kcm.inputHandlerAvailable && kcm.connectedGameControllerCount > 0
+            text: i18np("%1 controller ready for Bigscreen", "%1 controllers ready for Bigscreen", kcm.connectedGameControllerCount)
+            description: i18n("Steam and games can use controllers directly. Bigscreen navigation pauses while another app is using them.")
+            icon.name: "input-gamepad-symbolic"
+
+            KeyNavigation.up: addControllerButton
+            KeyNavigation.down: scanButton
         }
 
         Bigscreen.ButtonDelegate {
@@ -156,7 +167,7 @@ Bigscreen.ScrollablePage {
             icon.name: bluetoothView.discoveryError ? "dialog-warning-symbolic" : "view-refresh-symbolic"
             enabled: bluetoothView.bluetoothReady
 
-            KeyNavigation.up: addControllerButton
+            KeyNavigation.up: readyControllersDelegate.visible ? readyControllersDelegate : addControllerButton
             KeyNavigation.down: pairedDelegateList
 
             onClicked: bluetoothView.startDiscovery()

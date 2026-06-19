@@ -15,6 +15,7 @@ class Bluetooth : public KQuickConfigModule
     Q_PROPERTY(bool fromDatabase READ isFromDatabase)
     Q_PROPERTY(bool inputHandlerAvailable READ inputHandlerAvailable NOTIFY inputHandlerAvailableChanged)
     Q_PROPERTY(QVariantList connectedInputControllers READ connectedInputControllers NOTIFY connectedInputControllersChanged)
+    Q_PROPERTY(int connectedGameControllerCount READ connectedGameControllerCount NOTIFY connectedInputControllersChanged)
 public:
     Bluetooth(QObject *parent, const KPluginMetaData &data);
     ~Bluetooth() override;
@@ -28,6 +29,7 @@ public:
 
     bool inputHandlerAvailable() const;
     QVariantList connectedInputControllers() const;
+    int connectedGameControllerCount() const;
 
 Q_SIGNALS:
     void inputHandlerAvailableChanged();
