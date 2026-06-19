@@ -48,7 +48,6 @@ DeviceWatcher::DeviceWatcher(QObject *parent)
 DeviceWatcher::~DeviceWatcher()
 {
     if (m_inotifyFd >= 0) {
-        // Remove all watches
         for (int wd : m_watchDescriptors.keys()) {
             inotify_rm_watch(m_inotifyFd, wd);
         }
@@ -68,7 +67,7 @@ void DeviceWatcher::addDevicePath(const QString &devicePath)
         return;
     }
 
-    // Watch for open and close events on the device
+    // inotify tells us when to re-check ownership; /proc gives the actual owner.
     int wd = inotify_add_watch(m_inotifyFd, qPrintable(devicePath), IN_OPEN | IN_CLOSE_NOWRITE | IN_CLOSE_WRITE);
     if (wd < 0) {
         qWarning() << "DeviceWatcher: Failed to watch" << devicePath;
@@ -79,7 +78,6 @@ void DeviceWatcher::addDevicePath(const QString &devicePath)
     m_devicePathRefs.insert(devicePath, 1);
     m_watchDescriptors.insert(wd, devicePath);
 
-    // Initial check
     checkDeviceAccess();
 }
 
@@ -100,7 +98,6 @@ void DeviceWatcher::removeDevicePath(const QString &devicePath)
         return;
     }
 
-    // Find and remove the watch descriptor
     for (auto it = m_watchDescriptors.begin(); it != m_watchDescriptors.end(); ++it) {
         if (it.value() == devicePath) {
             inotify_rm_watch(m_inotifyFd, it.key());
@@ -119,13 +116,10 @@ void DeviceWatcher::removeDevicePath(const QString &devicePath)
 
 void DeviceWatcher::onInotifyEvent()
 {
-    // Read and discard all pending events - we just care that something happened
     char buffer[4096];
     while (read(m_inotifyFd, buffer, sizeof(buffer)) > 0) {
-        // Events consumed
     }
 
-    // Check if device access state changed
     checkDeviceAccess();
 }
 
@@ -185,7 +179,6 @@ bool DeviceWatcher::isDeviceOpenByOthers() const
             QString target = QFile::symLinkTarget(fdDirPath + QLatin1Char('/') + fd);
 
             if (m_devicePaths.contains(target)) {
-                // Check process name only when we find a match
                 QFile commFile(QStringLiteral("/proc/%1/comm").arg(pid));
                 if (commFile.open(QIODevice::ReadOnly)) {
                     QString name = QString::fromUtf8(commFile.readLine()).trimmed();

@@ -250,7 +250,7 @@ void ControllerHandlerStatus::onCecControllerRemoved(const QString &name)
 
 void ControllerHandlerStatus::onInputSuppressedChanged(bool suppressed, bool automatic)
 {
-    // Fetch the current manual suppression state from DBus
+    // The signal tells us suppression changed; the manual/automatic split lives on the property.
     bool newManuallySuppressed = m_inputManuallySuppressed;
     if (m_dbusInterface) {
         newManuallySuppressed = m_dbusInterface->property("inputManuallySuppressed").toBool();

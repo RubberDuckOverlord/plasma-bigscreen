@@ -101,7 +101,7 @@ void BigscreenShellSettings::setWindowDecorationsEnabled(bool windowDecorationsE
     group.writeEntry("windowDecorationsEnabled", windowDecorationsEnabled, KConfigGroup::Notify);
     m_config->sync();
 
-    // Update environment settings
+    // Apply the decoration change to the running shell environment.
     auto *job = new KIO::CommandLauncherJob(QStringLiteral("plasma-bigscreen-envmanager --apply-settings"), {});
     job->setUiDelegate(new KNotificationJobUiDelegate(KJobUiDelegate::AutoErrorHandlingEnabled));
     job->setDesktopName(QStringLiteral("org.kde.plasma-bigscreen-envmanager"));

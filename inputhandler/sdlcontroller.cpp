@@ -259,17 +259,18 @@ static QMap<SDL_GamepadButton, QList<InputAction>> gamepadButtonMappings(SdlCont
 
     switch (family) {
     case SdlControllerFamily::Xbox:
-        // Xbox Series share button: useful as an explicit contextual menu action in Bigscreen.
+        // The share button is a good fit for Bigscreen's context menu.
         mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {InputAction::Menu});
         break;
     case SdlControllerFamily::PlayStation:
-        // DualShock/DualSense touchpad click is a natural menu/control surface affordance.
+        // Treat the touchpad click as the PlayStation controller's menu surface.
         mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {InputAction::Menu});
         break;
     case SdlControllerFamily::Steam:
-        mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {InputAction::SystemMenu}); // QAM/Steam menu
-        mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {InputAction::Select}); // Left/primary trackpad click
-        mappings.insert(SDL_GAMEPAD_BUTTON_MISC2, {InputAction::Menu}); // Right/secondary trackpad click
+        // Keep the Steam-specific buttons close to their Big Picture behavior.
+        mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {InputAction::SystemMenu});
+        mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {InputAction::Select});
+        mappings.insert(SDL_GAMEPAD_BUTTON_MISC2, {InputAction::Menu});
         mappings.insert(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, {InputAction::Next});
         mappings.insert(SDL_GAMEPAD_BUTTON_LEFT_PADDLE1, {InputAction::Previous});
         mappings.insert(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2, {InputAction::BrowserForward});
@@ -312,10 +313,9 @@ SdlController::SdlController()
 {
     m_autoSuppressInput = InputHandlerSettings::self()->autoSuppressInput();
 
-    // Initialize SDL3 gamepad and joystick subsystems. The gamepad API gives
-    // normalized layouts; the joystick API catches devices without mappings.
+    // Use both SDL APIs: gamepad gives normalized layouts, joystick keeps unmapped devices working.
     if (!s_sdlInitialized) {
-        // Prevent SDL from installing signal handlers that would block SIGINT (Ctrl+C)
+        // Keep Ctrl+C usable when running the daemon from a terminal.
         SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
 
         if (!SDL_Init(SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK)) {
@@ -326,7 +326,7 @@ SdlController::SdlController()
         qInfo() << "SDL3 controller subsystems initialized";
     }
 
-    // Watch for other processes listening to the controller
+    // Step aside when a game or media app opens the controller directly.
     m_deviceWatcher = new DeviceWatcher(this);
     connect(m_deviceWatcher, &DeviceWatcher::otherProcessesChanged, this, [this](bool othersUsing) {
         qInfo() << "Other processes using device:" << othersUsing;
@@ -347,12 +347,10 @@ SdlController::SdlController()
         }
     });
 
-    // Set up polling timer
     m_pollTimer = new QTimer(this);
     connect(m_pollTimer, &QTimer::timeout, this, &SdlController::poll);
     m_pollTimer->start(LONG_POLL_INTERVAL);
 
-    // Check for already connected gamepads
     int numGamepads = 0;
     SDL_JoystickID *gamepadIds = SDL_GetGamepads(&numGamepads);
     if (gamepadIds) {
@@ -375,13 +373,11 @@ SdlController::SdlController()
         SDL_free(joystickIds);
     }
 
-    // Do an initial poll shortly after startup
     QTimer::singleShot(100, this, &SdlController::poll);
 }
 
 SdlController::~SdlController()
 {
-    // Clean up devices
     for (auto device : m_devices) {
         ControllerManager::instance().deviceRemoved(device);
         delete device;
@@ -610,7 +606,6 @@ void SdlController::addGamepadDevice(SDL_JoystickID instanceId)
 
     Q_EMIT controllerAdded(deviceName);
 
-    // Switch to faster polling when we have devices
     m_pollTimer->setInterval(SHORT_POLL_INTERVAL);
 }
 
@@ -641,7 +636,6 @@ void SdlController::addJoystickDevice(SDL_JoystickID instanceId)
 
     Q_EMIT controllerAdded(deviceName);
 
-    // Switch to faster polling when we have devices
     m_pollTimer->setInterval(SHORT_POLL_INTERVAL);
 }
 
@@ -665,7 +659,6 @@ void SdlController::removeDevice(SDL_JoystickID instanceId)
 
     Q_EMIT controllerRemoved(deviceName);
 
-    // Switch to slower polling if no devices
     if (m_devices.isEmpty()) {
         m_pollTimer->setInterval(LONG_POLL_INTERVAL);
     }
@@ -687,7 +680,7 @@ void SdlDevice::initializeUsedKeys(const QList<InputAction> &buttonActions)
     QSet<int> keys;
     keys.unite(keysForInputActions(buttonActions));
 
-    // Add keys produced by axes, hats and triggers.
+    // Include actions that come from sticks, hats, and triggers rather than buttons.
     keys.unite(keysForInputActions({
         InputAction::NavigateUp,
         InputAction::NavigateDown,
@@ -699,7 +692,7 @@ void SdlDevice::initializeUsedKeys(const QList<InputAction> &buttonActions)
 
     setUsedKeys(keys);
 
-    // Set up mouse movement timer (runs at ~60fps when right stick is active)
+    // Right-stick mouse movement only ticks while the stick is active.
     m_mouseTimer = new QTimer(this);
     m_mouseTimer->setInterval(16);
     connect(m_mouseTimer, &QTimer::timeout, this, &SdlDevice::updateMouseMovement);
@@ -787,14 +780,12 @@ SdlJoystickDevice::~SdlJoystickDevice()
 
 void SdlDevice::updateMouseMovement()
 {
-    // Suppress mouse movement when input is suppressed
     if (m_controller->isSuppressInput()) {
         return;
     }
 
-    // Check if right stick is outside deadzone
     if (qAbs(m_rightStickX) > MOUSE_DEADZONE || qAbs(m_rightStickY) > MOUSE_DEADZONE) {
-        // Normalize to -1.0 to 1.0 range, applying deadzone
+        // Apply the deadzone before scaling so stick drift does not move the pointer.
         double normalizedX = 0.0;
         double normalizedY = 0.0;
 
@@ -805,7 +796,6 @@ void SdlDevice::updateMouseMovement()
             normalizedY = (m_rightStickY - (m_rightStickY > 0 ? MOUSE_DEADZONE : -MOUSE_DEADZONE)) / (32767.0 - MOUSE_DEADZONE);
         }
 
-        // Apply sensitivity and send mouse movement
         double deltaX = normalizedX * MOUSE_SENSITIVITY;
         double deltaY = normalizedY * MOUSE_SENSITIVITY;
 
@@ -850,8 +840,8 @@ void SdlDevice::setKey(InputAction action, int key, bool pressed)
         return;
     }
 
-    // While another app owns the controller, ignore non-system actions entirely.
-    // This keeps Bigscreen from inheriting stale button/axis state when handoff ends.
+    // While another app owns the controller, only system actions pass through.
+    // Otherwise Bigscreen may inherit stale button or axis state when focus returns.
     if (!inputAllowedWhileSuppressed(action)) {
         if (!pressed) {
             m_pressedKeys.remove(key);
@@ -938,14 +928,13 @@ void SdlGamepadDevice::processButtonEvent(const SDL_GamepadButtonEvent &event)
 
     qDebug() << "Button event:" << event.button << "pressed:" << pressed;
 
-    // Right stick click -> left mouse button (suppressed when input suppressed)
+    // Stick clicks act as mouse buttons for pointer-style navigation.
     if (button == SDL_GAMEPAD_BUTTON_RIGHT_STICK) {
         if (!m_controller->isSuppressInput()) {
             ControllerManager::instance().emitPointerButton(this, BTN_LEFT, pressed);
         }
         return;
     }
-    // Left stick click -> right mouse button (suppressed when input suppressed)
     if (button == SDL_GAMEPAD_BUTTON_LEFT_STICK) {
         if (!m_controller->isSuppressInput()) {
             ControllerManager::instance().emitPointerButton(this, BTN_RIGHT, pressed);
@@ -964,42 +953,36 @@ void SdlGamepadDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
     int value = event.value;
     auto axis = static_cast<SDL_GamepadAxis>(event.axis);
 
-    // Handle left stick X axis (left/right navigation)
     if (axis == SDL_GAMEPAD_AXIS_LEFTX) {
         int newDirection = 0;
         if (value > AXIS_THRESHOLD) {
-            newDirection = 1; // Right
+            newDirection = 1;
         } else if (value < -AXIS_THRESHOLD) {
-            newDirection = -1; // Left
+            newDirection = -1;
         }
         setDirectionalAction(newDirection, m_axisLeftXDirection, InputAction::NavigateLeft, InputAction::NavigateRight);
     }
-    // Handle left stick Y axis (up/down navigation)
     else if (axis == SDL_GAMEPAD_AXIS_LEFTY) {
         int newDirection = 0;
         if (value > AXIS_THRESHOLD) {
-            newDirection = 1; // Down
+            newDirection = 1;
         } else if (value < -AXIS_THRESHOLD) {
-            newDirection = -1; // Up
+            newDirection = -1;
         }
         setDirectionalAction(newDirection, m_axisLeftYDirection, InputAction::NavigateUp, InputAction::NavigateDown);
     }
-    // Handle left trigger (L2)
     else if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER) {
         bool pressed = (value > AXIS_THRESHOLD);
         setAction(InputAction::BrowserBack, pressed);
     }
-    // Handle right trigger (R2)
     else if (axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
         bool pressed = (value > AXIS_THRESHOLD);
         setAction(InputAction::BrowserForward, pressed);
     }
-    // Handle right stick X axis (mouse horizontal movement)
     else if (axis == SDL_GAMEPAD_AXIS_RIGHTX) {
         m_rightStickX = value;
         updateMouseTimer();
     }
-    // Handle right stick Y axis (mouse vertical movement)
     else if (axis == SDL_GAMEPAD_AXIS_RIGHTY) {
         m_rightStickY = value;
         updateMouseTimer();

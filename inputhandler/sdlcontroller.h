@@ -69,20 +69,18 @@ protected:
     void updateMouseTimer();
 
     SdlController *const m_controller;
-    // Axis state for direction tracking (left stick -> keyboard)
-    int m_axisLeftXDirection = 0; // -1 left, 0 center, 1 right
-    int m_axisLeftYDirection = 0; // -1 up, 0 center, 1 down
+    // Remember analog directions so they behave like press/release key pairs.
+    int m_axisLeftXDirection = 0;
+    int m_axisLeftYDirection = 0;
     int m_hatXDirection = 0;
     int m_hatYDirection = 0;
-    // Right stick state for mouse movement
+    // Right-stick pointer state.
     double m_rightStickX = 0.0;
     double m_rightStickY = 0.0;
 
-    // Threshold for axis to be considered pressed (0-32767 range)
     static constexpr int AXIS_THRESHOLD = 16384;
-    // Deadzone for mouse movement (smaller than keyboard threshold)
+    // Smaller than AXIS_THRESHOLD so pointer movement feels responsive without drifting.
     static constexpr int MOUSE_DEADZONE = 4000;
-    // Mouse sensitivity multiplier
     static constexpr double MOUSE_SENSITIVITY = 15.0;
 
 private:
@@ -168,7 +166,7 @@ public:
 Q_SIGNALS:
     void controllerAdded(const QString &name);
     void controllerRemoved(const QString &name);
-    void isSuppressInputChanged(bool suppressed, bool automatic); // automatic - whether it was changed by the DeviceWatcher
+    void isSuppressInputChanged(bool suppressed, bool automatic);
     void autoSuppressInputChanged(bool enabled);
 
 private Q_SLOTS:
@@ -187,12 +185,11 @@ private:
     QTimer *m_autoUnsuppressTimer = nullptr;
     bool m_suppressInput = false;
     bool m_autoSuppressInput = true;
-    bool m_manualSuppressInput = false; // Manually set via D-Bus
+    bool m_manualSuppressInput = false;
     QSet<QString> m_bigscreenInputFocusSources;
     DeviceWatcher *m_deviceWatcher = nullptr;
 
-    // Polling intervals
-    static constexpr int SHORT_POLL_INTERVAL = 16; // ~60fps when devices connected
-    static constexpr int LONG_POLL_INTERVAL = 2000; // 2 seconds when no devices
+    static constexpr int SHORT_POLL_INTERVAL = 16;
+    static constexpr int LONG_POLL_INTERVAL = 2000;
     static constexpr int AUTO_UNSUPPRESS_DELAY = 1000;
 };
