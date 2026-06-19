@@ -289,6 +289,19 @@ SdlController::SdlController()
         updateAutomaticSuppression();
     });
 
+    m_autoUnsuppressTimer = new QTimer(this);
+    m_autoUnsuppressTimer->setSingleShot(true);
+    m_autoUnsuppressTimer->setInterval(AUTO_UNSUPPRESS_DELAY);
+    connect(m_autoUnsuppressTimer, &QTimer::timeout, this, [this]() {
+        if (m_manualSuppressInput || !m_deviceWatcher) {
+            return;
+        }
+
+        if (!m_autoSuppressInput || !m_deviceWatcher->hasOtherProcesses()) {
+            setAutomaticSuppression(false);
+        }
+    });
+
     // Set up polling timer
     m_pollTimer = new QTimer(this);
     connect(m_pollTimer, &QTimer::timeout, this, &SdlController::poll);
@@ -409,6 +422,10 @@ void SdlController::setSuppressInput(bool suppress)
 {
     bool oldValue = m_suppressInput;
 
+    if (m_autoUnsuppressTimer) {
+        m_autoUnsuppressTimer->stop();
+    }
+
     m_manualSuppressInput = suppress;
     m_suppressInput = suppress;
 
@@ -420,6 +437,10 @@ void SdlController::setSuppressInput(bool suppress)
             releasePressedInput();
         }
         Q_EMIT isSuppressInputChanged(m_suppressInput, false);
+    }
+
+    if (!m_manualSuppressInput) {
+        updateAutomaticSuppression();
     }
 }
 
@@ -445,16 +466,40 @@ void SdlController::updateAutomaticSuppression()
         return;
     }
 
-    bool oldValue = m_suppressInput;
-    m_suppressInput = m_autoSuppressInput && m_deviceWatcher->hasOtherProcesses();
-
-    if (m_suppressInput == oldValue) {
+    const bool shouldSuppress = m_autoSuppressInput && m_deviceWatcher->hasOtherProcesses();
+    if (shouldSuppress) {
+        if (m_autoUnsuppressTimer) {
+            m_autoUnsuppressTimer->stop();
+        }
+        setAutomaticSuppression(true);
         return;
     }
 
+    if (!m_suppressInput) {
+        return;
+    }
+
+    if (m_autoSuppressInput && m_autoUnsuppressTimer) {
+        if (!m_autoUnsuppressTimer->isActive()) {
+            m_autoUnsuppressTimer->start();
+        }
+        return;
+    }
+
+    setAutomaticSuppression(false);
+}
+
+void SdlController::setAutomaticSuppression(bool suppress)
+{
+    if (m_suppressInput == suppress) {
+        return;
+    }
+
+    m_suppressInput = suppress;
     if (m_suppressInput) {
         releasePressedInput();
     }
+
     Q_EMIT isSuppressInputChanged(m_suppressInput, true);
     qInfo() << "SDL input suppression (auto):" << (m_suppressInput ? "enabled" : "disabled");
 }
@@ -463,6 +508,7 @@ void SdlController::releasePressedInput()
 {
     for (SdlDevice *device : std::as_const(m_devices)) {
         ControllerManager::instance().releasePressedInput(device);
+        device->resetInputState();
     }
 }
 
@@ -620,6 +666,21 @@ void SdlDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
 void SdlDevice::processJoystickHatEvent(const SDL_JoyHatEvent &event)
 {
     Q_UNUSED(event)
+}
+
+void SdlDevice::resetInputState()
+{
+    m_pressedKeys.clear();
+    m_axisLeftXDirection = 0;
+    m_axisLeftYDirection = 0;
+    m_hatXDirection = 0;
+    m_hatYDirection = 0;
+    m_rightStickX = 0.0;
+    m_rightStickY = 0.0;
+
+    if (m_mouseTimer) {
+        m_mouseTimer->stop();
+    }
 }
 
 SdlGamepadDevice::SdlGamepadDevice(SDL_Gamepad *gamepad, SDL_JoystickID instanceId, SdlController *controller)

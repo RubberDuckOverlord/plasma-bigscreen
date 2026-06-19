@@ -49,6 +49,7 @@ public:
     virtual void processJoystickButtonEvent(const SDL_JoyButtonEvent &event);
     virtual void processJoystickAxisEvent(const SDL_JoyAxisEvent &event);
     virtual void processJoystickHatEvent(const SDL_JoyHatEvent &event);
+    void resetInputState();
 
 Q_SIGNALS:
     void keyPress(int keyCode, bool pressed);
@@ -170,10 +171,12 @@ private:
     void addJoystickDevice(SDL_JoystickID instanceId);
     void removeDevice(SDL_JoystickID instanceId);
     void releasePressedInput();
+    void setAutomaticSuppression(bool suppress);
     void updateAutomaticSuppression();
 
     QMap<SDL_JoystickID, SdlDevice *> m_devices;
     QTimer *m_pollTimer = nullptr;
+    QTimer *m_autoUnsuppressTimer = nullptr;
     bool m_suppressInput = false;
     bool m_autoSuppressInput = true;
     bool m_manualSuppressInput = false; // Manually set via D-Bus
@@ -182,4 +185,5 @@ private:
     // Polling intervals
     static constexpr int SHORT_POLL_INTERVAL = 16; // ~60fps when devices connected
     static constexpr int LONG_POLL_INTERVAL = 2000; // 2 seconds when no devices
+    static constexpr int AUTO_UNSUPPRESS_DELAY = 1000;
 };

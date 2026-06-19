@@ -179,7 +179,7 @@ Bigscreen.ScrollablePage {
         Bigscreen.SwitchDelegate {
             id: autoSuppressDelegate
             text: i18n("Automatic input suppression")
-            description: i18n("Pause Bigscreen navigation while Steam or another game is using a controller")
+            description: i18n("Pause Bigscreen navigation while Steam or another game is using a controller, then resume when you return")
             checked: kcm.autoSuppressInput
             enabled: kcm.enabled && kcm.gameControllerEnabled
             visible: kcm.serviceAvailable && root.connectedGameControllers.length > 0
