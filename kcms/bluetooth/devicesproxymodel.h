@@ -17,6 +17,7 @@ class DevicesProxyModel : public QSortFilterProxyModel
     QML_ELEMENT
 
     Q_PROPERTY(bool hideBlockedDevices READ hideBlockedDevices WRITE setHideBlockedDevices NOTIFY hideBlockedDevicesChanged FINAL)
+    Q_PROPERTY(bool inputDevicesOnly READ inputDevicesOnly WRITE setInputDevicesOnly NOTIFY inputDevicesOnlyChanged FINAL)
     Q_PROPERTY(bool pairedOnly READ pairedOnly WRITE setPairedOnly)
     Q_PROPERTY(int count READ rowCount NOTIFY rowCountChanged)
 
@@ -33,6 +34,9 @@ public:
     bool hideBlockedDevices() const;
     void setHideBlockedDevices(bool Hide);
 
+    bool inputDevicesOnly() const;
+    void setInputDevicesOnly(bool inputDevicesOnly);
+
     bool pairedOnly() const;
     void setPairedOnly(bool pairedOnly);
 
@@ -44,11 +48,16 @@ public:
 
 Q_SIGNALS:
     void hideBlockedDevicesChanged();
+    void inputDevicesOnlyChanged();
     void rowCountChanged();
 
 private:
     bool duplicateIndexAddress(const QModelIndex &idx) const;
+    bool isInputDevice(const QModelIndex &idx) const;
+    bool isLikelyControllerName(const QString &name) const;
+    bool isUnresolvedDeviceName(const QModelIndex &idx) const;
 
     bool m_hideBlockedDevices = false;
+    bool m_inputDevicesOnly = false;
     bool m_pairedOnly = false;
 };

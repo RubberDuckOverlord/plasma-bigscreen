@@ -93,6 +93,13 @@ Bigscreen.ScrollablePage {
         sourceModel: BluezQt.DevicesModel {}
     }
 
+    DevicesProxyModel {
+        id: controllerCandidatesModel
+        pairedOnly: false
+        inputDevicesOnly: true
+        sourceModel: BluezQt.DevicesModel {}
+    }
+
     ColumnLayout {
         KeyNavigation.left: bluetoothView.KeyNavigation.left
         id: column
@@ -253,18 +260,20 @@ Bigscreen.ScrollablePage {
                 id: controllerScanButton
                 Layout.fillWidth: true
                 text: bluetoothView.discovering ? i18n("Scanning…") : i18n("Scan again")
-                description: bluetoothView.discoveryError || i18n("Keep the controller awake while Bigscreen searches")
+                description: bluetoothView.discoveryError || i18n("Only likely controllers and unresolved input devices are shown here")
                 icon.name: bluetoothView.discoveryError ? "dialog-warning-symbolic" : "view-refresh-symbolic"
 
-                KeyNavigation.down: controllerCandidatesView.count > 0 ? controllerCandidatesView : closeControllerSetupButton
+                KeyNavigation.down: controllerCandidatesModel.count > 0 ? controllerCandidatesView : closeControllerSetupButton
                 onClicked: bluetoothView.startDiscovery()
             }
 
             Bigscreen.TextDelegate {
                 Layout.fillWidth: true
-                visible: unpairedDevicesModel.count === 0
+                visible: controllerCandidatesModel.count === 0
                 text: bluetoothView.discovering ? i18n("Looking for controllers…") : i18n("No new controllers found")
-                description: i18n("Make sure the controller is nearby, awake, and still flashing.")
+                description: unpairedDevicesModel.count > 0
+                    ? i18n("Other Bluetooth devices are available in the device list below.")
+                    : i18n("Make sure the controller is nearby, awake, and still flashing.")
                 icon.name: "view-refresh-symbolic"
             }
 
@@ -275,7 +284,7 @@ Bigscreen.ScrollablePage {
                 visible: count > 0
                 clip: true
                 spacing: Kirigami.Units.smallSpacing
-                model: unpairedDevicesModel
+                model: controllerCandidatesModel
                 keyNavigationEnabled: true
 
                 KeyNavigation.up: controllerScanButton
@@ -300,7 +309,7 @@ Bigscreen.ScrollablePage {
                 text: i18n("Close")
                 icon.name: "dialog-close-symbolic"
 
-                KeyNavigation.up: controllerCandidatesView.count > 0 ? controllerCandidatesView : controllerScanButton
+                KeyNavigation.up: controllerCandidatesModel.count > 0 ? controllerCandidatesView : controllerScanButton
                 onClicked: controllerSetupDialog.close()
             }
         }
