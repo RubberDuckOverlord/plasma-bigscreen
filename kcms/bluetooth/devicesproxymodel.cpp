@@ -119,14 +119,21 @@ bool DevicesProxyModel::duplicateIndexAddress(const QModelIndex &idx) const
 
 bool DevicesProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const
 {
-    const QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
-    const QString name = sourceModel()->data(index, BluezQt::DevicesModel::NameRole).toString();
-    const QString address = sourceModel()->data(index, BluezQt::DevicesModel::AddressRole).toString().replace(QLatin1Char(':'), QLatin1Char('-'));
-    if (m_pairedOnly) {
-        return !(name == address) && sourceModel()->data(index, BluezQt::DevicesModel::PairedRole).toBool();
-    } else {
-        return !(name == address) && !sourceModel()->data(index, BluezQt::DevicesModel::PairedRole).toBool();
+    if (!sourceModel()) {
+        return false;
     }
+
+    const QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
+    if (m_hideBlockedDevices && sourceModel()->data(index, BluezQt::DevicesModel::BlockedRole).toBool()) {
+        return false;
+    }
+
+    const bool paired = sourceModel()->data(index, BluezQt::DevicesModel::PairedRole).toBool();
+    if (m_pairedOnly) {
+        return paired;
+    }
+
+    return !paired;
 }
 
 QString DevicesProxyModel::adapterHciString(const QString &ubi)

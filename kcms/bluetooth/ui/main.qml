@@ -19,6 +19,8 @@ import org.kde.bigscreen as Bigscreen
 
 import org.kde.plasma.bigscreen.bluetooth
 
+import "script.js" as Script
+
 Bigscreen.ScrollablePage {
     id: bluetoothView
 
@@ -31,19 +33,46 @@ Bigscreen.ScrollablePage {
     bottomPadding: Kirigami.Units.smallSpacing
 
     property BluezQt.Manager manager: BluezQt.Manager
+    readonly property var usableAdapter: manager.usableAdapter
+    readonly property bool bluetoothReady: BluezQt.Manager.bluetoothOperational && usableAdapter
+    readonly property bool discovering: bluetoothReady && usableAdapter.discovering
+    property string discoveryError: ""
+
+    function startDiscovery() {
+        if (!bluetoothReady) {
+            return;
+        }
+
+        discoveryError = "";
+        Script.makeCall(usableAdapter.startDiscovery(), call => {
+            if (call.error) {
+                discoveryError = call.errorText;
+            }
+        });
+    }
 
     Connections {
         target: manager
 
         onUsableAdapterChanged: {
-            manager.usableAdapter.startDiscovery();
+            bluetoothView.startDiscovery();
         }
     }
+
+    Component.onCompleted: startDiscovery()
 
     onActiveFocusChanged: {
         if (activeFocus) {
             bluetoothToggle.forceActiveFocus();
+            startDiscovery();
         }
+    }
+
+    Timer {
+        id: discoveryRestartTimer
+        interval: 500
+        repeat: false
+        onTriggered: bluetoothView.startDiscovery()
     }
 
     DevicesProxyModel {
@@ -74,13 +103,32 @@ Bigscreen.ScrollablePage {
 
                 BluezQt.Manager.bluetoothBlocked = !bluetoothStatus;
                 BluezQt.Manager.adapters.forEach(adapter => {
-                    adapter.powered = !bluetoothStatus;
+                    adapter.powered = bluetoothStatus;
                 });
+
+                if (bluetoothStatus) {
+                    discoveryRestartTimer.restart();
+                }
 
                 checked = Qt.binding(() => BluezQt.Manager.bluetoothOperational);
             }
 
+            KeyNavigation.down: scanButton
+        }
+
+        Bigscreen.ButtonDelegate {
+            id: scanButton
+            raisedBackground: false
+            visible: BluezQt.Manager.bluetoothOperational
+            text: bluetoothView.discovering ? i18n("Scanning for devices…") : i18n("Scan for devices")
+            description: bluetoothView.discoveryError || i18n("Use this while a controller is in pairing mode")
+            icon.name: bluetoothView.discoveryError ? "dialog-warning-symbolic" : "view-refresh-symbolic"
+            enabled: bluetoothView.bluetoothReady
+
+            KeyNavigation.up: bluetoothToggle
             KeyNavigation.down: pairedDelegateList
+
+            onClicked: bluetoothView.startDiscovery()
         }
 
         QQC2.Label {

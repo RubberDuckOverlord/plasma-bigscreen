@@ -21,6 +21,42 @@ Bigscreen.SidebarOverlay {
 
     property bool connecting: false
     property bool disconnecting: false
+    property string operationError: ""
+
+    function operationStatusText() {
+        if (operationError) {
+            return operationError;
+        }
+        if (connecting) {
+            return i18n("Keep the device awake and in pairing mode until this finishes");
+        }
+        if (device && Script.isInputDevice(device) && device.connected) {
+            return i18n("Connected. If it does not appear under Input, press a button once.");
+        }
+        if (device && Script.isInputDevice(device) && device.paired) {
+            return i18n("Trusted input devices can reconnect automatically.");
+        }
+        return "";
+    }
+
+    function markInputDeviceTrusted() {
+        if (device && Script.isInputDevice(device) && device.paired && !device.trusted) {
+            device.trusted = true;
+        }
+    }
+
+    function finishOperation(call, fallbackError) {
+        root.connecting = false;
+        root.disconnecting = false;
+
+        if (call.error) {
+            root.operationError = call.errorText || fallbackError;
+            return;
+        }
+
+        root.operationError = "";
+        markInputDeviceTrusted();
+    }
 
     header: Bigscreen.SidebarOverlayHeader {
         iconSource: device ? device.icon : ""
@@ -46,38 +82,39 @@ Bigscreen.SidebarOverlay {
             id: connectToggleButton
 
             text: device ? (root.connecting ? i18n("Connecting…") : (root.disconnecting ? i18n("Disconnecting…") : (device.connected ? i18n("Disconnect") : (!device.paired ? i18n("Pair") : i18n("Connect"))))) : ""
+            description: root.operationStatusText()
             icon.name: device ? (device.connected ? "network-disconnect" : "network-connect") : ""
+            enabled: device && !root.connecting && !root.disconnecting
 
             KeyNavigation.down: forgetButton
             Keys.onLeftPressed: root.close()
 
             onClicked: {
+                root.operationError = "";
                 if (!device.paired) {
                     root.connecting = true;
                     Script.makeCall(device.pair(), call => {
-                        root.connecting = false;
-                        if (call.error) {
-                            console.log("makeCall error when pairing: " + call.errorText)
-                        }
+                        root.finishOperation(call, i18n("Pairing failed"));
                     });
                 } else if (device.connected) {
                     root.disconnecting = true;
                     Script.makeCall(device.disconnectFromDevice(), call => {
-                        root.disconnecting = false;
-                        if (call.error) {
-                            console.log("makeCall error when disconnecting: " + call.errorText);
-                        }
+                        root.finishOperation(call, i18n("Disconnecting failed"));
                     });
                 } else {
                     root.connecting = true;
                     Script.makeCall(device.connectToDevice(), call => {
-                        root.connecting = false;
-                        if (call.error) {
-                            console.log("makeCall error when connecting: " + call.errorText);
-                        }
+                        root.finishOperation(call, i18n("Connecting failed"));
                     });
                 }
             }
+        }
+
+        Bigscreen.TextDelegate {
+            visible: device && Script.isInputDevice(device)
+            text: i18n("Controller setup")
+            description: Script.controllerPairingHint(device)
+            icon.name: "input-gamepad-symbolic"
         }
 
         Bigscreen.ButtonDelegate {

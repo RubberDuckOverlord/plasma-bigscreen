@@ -21,11 +21,24 @@ Bigscreen.ButtonDelegate {
     property bool connecting: false
     property bool disconnecting: false
 
+    function displayName() {
+        if (model.DeviceFullName) {
+            return model.DeviceFullName;
+        }
+
+        const addressName = model.Address ? model.Address.replace(/:/g, "-") : "";
+        if (!model.Name || model.Name === addressName) {
+            return i18n("Unknown device");
+        }
+
+        return model.Name;
+    }
+
     function desc() {
         if (connecting) {
-            return "Connecting…";
+            return i18n("Connecting…");
         } else if (disconnecting) {
-            return "Disconnecting…";
+            return i18n("Disconnecting…");
         } else {
             const labels = [];
 
@@ -38,13 +51,16 @@ Bigscreen.ButtonDelegate {
             if (model.Battery) {
                 labels.push(i18n("%1% Battery", model.Battery.percentage));
             }
+            if (model.Name !== displayName() && model.Address) {
+                labels.push(model.Address);
+            }
 
             return labels.join(" · ");
         }
     }
 
     icon.name: model.Icon
-    text: model.Name
+    text: displayName()
     textFont.bold: model.Connected
 
     description: desc()
