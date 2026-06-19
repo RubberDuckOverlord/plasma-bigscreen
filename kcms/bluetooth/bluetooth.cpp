@@ -3,13 +3,21 @@
 
 #include "bluetooth.h"
 #include "devicesproxymodel.h"
+#include "inputhandlerinterface.h"
 
 #include <KPluginFactory>
 #include <QAbstractItemModel>
 
+#include <QDBusArgument>
+#include <QDBusConnection>
+#include <QDBusConnectionInterface>
+#include <QDBusPendingReply>
+#include <QDBusVariant>
+#include <QDebug>
 #include <QFile>
 #include <QRandomGenerator>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QXmlStreamReader>
 #include <qqml.h>
 
@@ -18,12 +26,67 @@
 
 K_PLUGIN_CLASS_WITH_JSON(Bluetooth, "kcm_mediacenter_bluetooth.json")
 
+using namespace Qt::StringLiterals;
+
+static const QString s_inputHandlerServiceName = u"org.kde.plasma.bigscreen.inputhandler"_s;
+static const QString s_inputHandlerObjectPath = u"/InputHandler"_s;
+
+static QVariantMap controllerMapFromVariant(QVariant controller)
+{
+    if (controller.canConvert<QDBusVariant>()) {
+        controller = controller.value<QDBusVariant>().variant();
+    }
+
+    if (controller.canConvert<QVariantMap>()) {
+        return controller.toMap();
+    }
+
+    if (controller.canConvert<QDBusArgument>()) {
+        QVariantMap controllerMap;
+        controller.value<QDBusArgument>() >> controllerMap;
+        return controllerMap;
+    }
+
+    return {};
+}
+
+static QVariantList controllerListFromDBusReply(const QVariantList &controllers)
+{
+    QVariantList controllerList;
+    controllerList.reserve(controllers.size());
+
+    for (QVariant controller : controllers) {
+        QVariantMap controllerMap = controllerMapFromVariant(controller);
+        if (!controllerMap.isEmpty()) {
+            controllerList.append(controllerMap);
+        }
+    }
+
+    return controllerList;
+}
+
 Bluetooth::Bluetooth(QObject *parent, const KPluginMetaData &data)
     : KQuickConfigModule(parent, data)
+    , m_inputHandlerWatcher(new QDBusServiceWatcher(s_inputHandlerServiceName,
+                                                    QDBusConnection::sessionBus(),
+                                                    QDBusServiceWatcher::WatchForRegistration | QDBusServiceWatcher::WatchForUnregistration,
+                                                    this))
 {
     setButtons(Apply);
 
     qmlRegisterType<DevicesProxyModel>("org.kde.plasma.bigscreen.bluetooth", 1, 0, "DevicesProxyModel");
+
+    connect(m_inputHandlerWatcher, &QDBusServiceWatcher::serviceRegistered, this, &Bluetooth::connectToInputHandler);
+    connect(m_inputHandlerWatcher, &QDBusServiceWatcher::serviceUnregistered, this, &Bluetooth::disconnectFromInputHandler);
+
+    if (QDBusConnection::sessionBus().interface()->isServiceRegistered(s_inputHandlerServiceName)) {
+        connectToInputHandler();
+    }
+}
+
+Bluetooth::~Bluetooth()
+{
+    disconnectFromInputHandler();
 }
 
 void Bluetooth::setPin(const QString &pin)
@@ -98,6 +161,168 @@ QString Bluetooth::getPin(BluezQt::DevicePtr device)
     }
 
     return m_pin;
+}
+
+bool Bluetooth::inputHandlerAvailable() const
+{
+    return m_inputHandlerAvailable;
+}
+
+QVariantList Bluetooth::connectedInputControllers() const
+{
+    return m_connectedInputControllers;
+}
+
+void Bluetooth::refreshInputControllers()
+{
+    updateInputControllers();
+}
+
+bool Bluetooth::hasAnyConnectedGameController() const
+{
+    for (const QVariant &controller : m_connectedInputControllers) {
+        const QVariantMap controllerMap = controller.toMap();
+        if (controllerMap.value(QStringLiteral("type")).toString() == QStringLiteral("gameController")) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Bluetooth::hasConnectedInputControllerForDevice(BluezQt::DevicePtr device) const
+{
+    if (!device || !device->isConnected()) {
+        return false;
+    }
+
+    int connectedGameControllerCount = 0;
+    for (const QVariant &controller : m_connectedInputControllers) {
+        const QVariantMap controllerMap = controller.toMap();
+        if (controllerMap.value(QStringLiteral("type")).toString() != QStringLiteral("gameController")) {
+            continue;
+        }
+
+        connectedGameControllerCount++;
+        if (controllerMatchesDevice(controllerMap, device)) {
+            return true;
+        }
+    }
+
+    return connectedGameControllerCount == 1;
+}
+
+void Bluetooth::connectToInputHandler()
+{
+    if (m_inputHandlerInterface) {
+        return;
+    }
+
+    m_inputHandlerInterface = new OrgKdePlasmaBigscreenInputhandlerInterface(s_inputHandlerServiceName, s_inputHandlerObjectPath, QDBusConnection::sessionBus(), this);
+    if (!m_inputHandlerInterface->isValid()) {
+        delete m_inputHandlerInterface;
+        m_inputHandlerInterface = nullptr;
+        return;
+    }
+
+    connect(m_inputHandlerInterface, &OrgKdePlasmaBigscreenInputhandlerInterface::connectedControllersChanged, this, &Bluetooth::scheduleInputControllerUpdate);
+    connect(m_inputHandlerInterface, &OrgKdePlasmaBigscreenInputhandlerInterface::gameControllerEnabledChanged, this, &Bluetooth::scheduleInputControllerUpdate);
+
+    m_inputHandlerAvailable = true;
+    Q_EMIT inputHandlerAvailableChanged();
+    updateInputControllers();
+}
+
+void Bluetooth::disconnectFromInputHandler()
+{
+    if (m_inputHandlerInterface) {
+        delete m_inputHandlerInterface;
+        m_inputHandlerInterface = nullptr;
+    }
+
+    if (m_inputHandlerAvailable) {
+        m_inputHandlerAvailable = false;
+        Q_EMIT inputHandlerAvailableChanged();
+    }
+
+    if (!m_connectedInputControllers.isEmpty()) {
+        m_connectedInputControllers.clear();
+        Q_EMIT connectedInputControllersChanged();
+    }
+}
+
+void Bluetooth::scheduleInputControllerUpdate()
+{
+    if (m_inputControllerUpdateScheduled) {
+        return;
+    }
+
+    m_inputControllerUpdateScheduled = true;
+    QTimer::singleShot(0, this, [this]() {
+        m_inputControllerUpdateScheduled = false;
+        updateInputControllers();
+    });
+}
+
+void Bluetooth::updateInputControllers()
+{
+    m_inputControllerUpdateScheduled = false;
+
+    if (!m_inputHandlerInterface) {
+        return;
+    }
+
+    QDBusPendingReply<QVariantList> reply = m_inputHandlerInterface->connectedControllers();
+    reply.waitForFinished();
+
+    QVariantList connectedControllers;
+    if (!reply.isError()) {
+        connectedControllers = controllerListFromDBusReply(reply.value());
+    } else {
+        qWarning() << "Failed to fetch connected input controllers:" << reply.error().message();
+    }
+
+    if (m_connectedInputControllers != connectedControllers) {
+        m_connectedInputControllers = connectedControllers;
+        Q_EMIT connectedInputControllersChanged();
+    }
+}
+
+QString Bluetooth::controllerFamilyForDevice(BluezQt::DevicePtr device) const
+{
+    if (!device) {
+        return {};
+    }
+
+    const QString name = device->name().toLower();
+    if (name.contains(QLatin1String("xbox"))) {
+        return QStringLiteral("xbox");
+    }
+    if (name.contains(QLatin1String("dualsense")) || name.contains(QLatin1String("dualshock")) || name.contains(QLatin1String("playstation"))
+        || name.contains(QLatin1String("wireless controller"))) {
+        return QStringLiteral("playstation");
+    }
+    if (name.contains(QLatin1String("steam"))) {
+        return QStringLiteral("steam");
+    }
+
+    return {};
+}
+
+bool Bluetooth::controllerMatchesDevice(const QVariantMap &controller, BluezQt::DevicePtr device) const
+{
+    if (!device || controller.value(QStringLiteral("type")).toString() != QStringLiteral("gameController")) {
+        return false;
+    }
+
+    const QString deviceFamily = controllerFamilyForDevice(device);
+    const QString controllerFamily = controller.value(QStringLiteral("controllerFamily")).toString();
+    if (!deviceFamily.isEmpty() && controllerFamily == deviceFamily) {
+        return true;
+    }
+
+    const QString deviceName = device->name().toLower();
+    const QString controllerName = controller.value(QStringLiteral("name")).toString().toLower();
+    return !deviceName.isEmpty() && !controllerName.isEmpty() && (controllerName.contains(deviceName) || deviceName.contains(controllerName));
 }
 
 #include "bluetooth.moc"

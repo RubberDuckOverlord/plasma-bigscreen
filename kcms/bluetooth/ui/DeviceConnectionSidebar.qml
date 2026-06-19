@@ -34,7 +34,13 @@ Bigscreen.SidebarOverlay {
             return i18n("Keep the device awake and in pairing mode until this finishes");
         }
         if (device && Script.isInputDevice(device) && device.connected) {
-            return i18n("Connected. If it does not appear under Input, press a button once.");
+            if (!kcm.inputHandlerAvailable) {
+                return i18n("Connected. Bigscreen input service is not available yet.");
+            }
+            if (kcm.hasConnectedInputControllerForDevice(device)) {
+                return i18n("Ready for Bigscreen navigation.");
+            }
+            return i18n("Connected. Press a button on the controller to finish input setup.");
         }
         if (device && Script.isInputDevice(device) && device.paired) {
             return i18n("Trusted input devices can reconnect automatically.");
@@ -73,6 +79,12 @@ Bigscreen.SidebarOverlay {
         return operationSerial;
     }
 
+    function refreshInputReadiness() {
+        if (device && Script.isInputDevice(device) && device.connected && kcm.inputHandlerAvailable) {
+            kcm.refreshInputControllers();
+        }
+    }
+
     function finishOperation(call, fallbackError, connectAfterSuccess, serial) {
         if (serial !== operationSerial) {
             return;
@@ -89,6 +101,7 @@ Bigscreen.SidebarOverlay {
 
         root.operationError = "";
         markInputDeviceTrusted();
+        refreshInputReadiness();
 
         if (connectAfterSuccess && device && Script.isInputDevice(device) && !device.connected) {
             root.connectAfterPair = true;
@@ -107,6 +120,7 @@ Bigscreen.SidebarOverlay {
             root.connectAfterPair = false;
             root.connecting = false;
             root.operationError = "";
+            root.refreshInputReadiness();
             return;
         }
 
@@ -152,6 +166,14 @@ Bigscreen.SidebarOverlay {
         onTriggered: root.connectInputDeviceAfterPair()
     }
 
+    Timer {
+        id: inputReadinessRefreshTimer
+        interval: 1000
+        repeat: true
+        running: root.opened && device && Script.isInputDevice(device) && device.connected && kcm.inputHandlerAvailable && !kcm.hasConnectedInputControllerForDevice(device)
+        onTriggered: root.refreshInputReadiness()
+    }
+
     Connections {
         target: root.device
         ignoreUnknownSignals: true
@@ -162,6 +184,7 @@ Bigscreen.SidebarOverlay {
 
         function onConnectedChanged() {
             root.connectInputDeviceAfterPair();
+            root.refreshInputReadiness();
         }
     }
 
@@ -223,7 +246,11 @@ Bigscreen.SidebarOverlay {
         Bigscreen.TextDelegate {
             visible: device && Script.isInputDevice(device)
             text: i18n("Controller setup")
-            description: Script.controllerPairingHint(device)
+            description: device && device.connected
+                ? (kcm.hasConnectedInputControllerForDevice(device)
+                    ? i18n("Input is ready. Use the controller to move around Bigscreen.")
+                    : i18n("If navigation does not start, press a controller button once or open Input settings to confirm it is detected."))
+                : Script.controllerPairingHint(device)
             icon.name: "input-gamepad-symbolic"
         }
 
