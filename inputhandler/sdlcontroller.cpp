@@ -780,6 +780,15 @@ void SdlDevice::setKey(InputAction action, int key, bool pressed)
         return;
     }
 
+    // While another app owns the controller, ignore non-system actions entirely.
+    // This keeps Bigscreen from inheriting stale button/axis state when handoff ends.
+    if (!inputAllowedWhileSuppressed(action)) {
+        if (!pressed) {
+            m_pressedKeys.remove(key);
+        }
+        return;
+    }
+
     if (pressed == m_pressedKeys.contains(key)) {
         return;
     }
@@ -788,11 +797,6 @@ void SdlDevice::setKey(InputAction action, int key, bool pressed)
         m_pressedKeys.insert(key);
     } else {
         m_pressedKeys.remove(key);
-    }
-
-    // When suppressed, only allow selected system keys through.
-    if (!inputAllowedWhileSuppressed(action)) {
-        return;
     }
 
     if (inputActionEmitsHome(action)) {
@@ -814,6 +818,11 @@ void SdlDevice::setKey(InputAction action, int key, bool pressed)
 
 void SdlDevice::setDirectionalAction(int newDirection, int &currentDirection, InputAction negativeAction, InputAction positiveAction)
 {
+    if (m_controller->isSuppressInput() && !inputAllowedWhileSuppressed(negativeAction) && !inputAllowedWhileSuppressed(positiveAction)) {
+        currentDirection = 0;
+        return;
+    }
+
     if (newDirection == currentDirection) {
         return;
     }
@@ -835,6 +844,15 @@ void SdlDevice::setDirectionalAction(int newDirection, int &currentDirection, In
 
 void SdlDevice::updateMouseTimer()
 {
+    if (m_controller->isSuppressInput()) {
+        m_rightStickX = 0.0;
+        m_rightStickY = 0.0;
+        if (m_mouseTimer->isActive()) {
+            m_mouseTimer->stop();
+        }
+        return;
+    }
+
     const bool stickActive = (qAbs(m_rightStickX) > MOUSE_DEADZONE || qAbs(m_rightStickY) > MOUSE_DEADZONE);
     if (stickActive && !m_mouseTimer->isActive()) {
         m_mouseTimer->start();
