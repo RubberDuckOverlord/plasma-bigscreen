@@ -21,6 +21,8 @@ class BigscreenShellSettings : public QObject
     Q_PROPERTY(bool navigationSoundEnabled READ navigationSoundEnabled WRITE setNavigationSoundEnabled NOTIFY navigationSoundEnabledChanged)
     Q_PROPERTY(bool windowDecorationsEnabled READ windowDecorationsEnabled WRITE setWindowDecorationsEnabled NOTIFY windowDecorationsEnabledChanged)
     Q_PROPERTY(bool powerButtonTurnsOffScreen READ powerButtonTurnsOffScreen WRITE setPowerButtonTurnsOffScreen NOTIFY powerButtonTurnsOffScreenChanged)
+    Q_PROPERTY(bool automaticScreenOffEnabled READ automaticScreenOffEnabled WRITE setAutomaticScreenOffEnabled NOTIFY automaticScreenOffChanged)
+    Q_PROPERTY(int automaticScreenOffMinutes READ automaticScreenOffMinutes WRITE setAutomaticScreenOffMinutes NOTIFY automaticScreenOffChanged)
 
 public:
     BigscreenShellSettings(QObject *parent = nullptr);
@@ -37,14 +39,22 @@ public:
     bool powerButtonTurnsOffScreen() const;
     void setPowerButtonTurnsOffScreen(bool powerButtonTurnsOffScreen);
 
+    bool automaticScreenOffEnabled() const;
+    void setAutomaticScreenOffEnabled(bool automaticScreenOffEnabled);
+
+    int automaticScreenOffMinutes() const;
+    void setAutomaticScreenOffMinutes(int minutes);
+
 Q_SIGNALS:
     void pmInhibitionEnabledChanged();
     void navigationSoundEnabledChanged();
     void windowDecorationsEnabledChanged();
     void powerButtonTurnsOffScreenChanged();
+    void automaticScreenOffChanged();
 
 private:
     void applyPowerDevilPowerButtonSetting(bool enabled, KConfigGroup &settingsGroup);
+    void applyPowerDevilAutomaticScreenOffSetting(bool enabled, int minutes, KConfigGroup &settingsGroup);
 
     KConfigWatcher::Ptr m_configWatcher;
     KSharedConfig::Ptr m_config;
