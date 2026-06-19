@@ -170,6 +170,11 @@ void InputHandlerDBus::setStartButtonEnabledWhenSuppressed(const QString &unique
     ControllerManager::instance().setStartButtonEnabledWhenSuppressed(uniqueIdentifier, enabled);
 }
 
+void InputHandlerDBus::prepareForDisplayOffWake()
+{
+    ControllerManager::instance().prepareForDisplayOffWake();
+}
+
 void InputHandlerDBus::setInputSuppressed(bool suppress)
 {
     if (!m_sdlController) {

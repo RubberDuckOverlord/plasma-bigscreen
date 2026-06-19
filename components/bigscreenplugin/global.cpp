@@ -72,6 +72,15 @@ static QImage readImage(int fileDescriptor, const QVariantMap &metadata)
     return result;
 }
 
+static void prepareInputHandlerForDisplayOffWake()
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.plasma.bigscreen.inputhandler"),
+                                                      QStringLiteral("/InputHandler"),
+                                                      QStringLiteral("org.kde.plasma.bigscreen.inputhandler"),
+                                                      QStringLiteral("prepareForDisplayOffWake"));
+    QDBusConnection::sessionBus().asyncCall(msg);
+}
+
 Global::Global(QObject *parent)
     : QObject(parent)
 {
@@ -92,6 +101,8 @@ void Global::promptLogoutGreeter(const QString message)
 
 void Global::turnOffScreen()
 {
+    prepareInputHandlerForDisplayOffWake();
+
     QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kglobalaccel"),
                                                       QStringLiteral("/component/org_kde_powerdevil"),
                                                       QStringLiteral("org.kde.kglobalaccel.Component"),

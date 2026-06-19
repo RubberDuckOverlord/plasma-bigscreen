@@ -61,6 +61,7 @@ public Q_SLOTS:
     Q_SCRIPTABLE QVariantList connectedControllers() const;
     Q_SCRIPTABLE void setControllerEnabled(const QString &uniqueIdentifier, bool enabled);
     Q_SCRIPTABLE void setStartButtonEnabledWhenSuppressed(const QString &uniqueIdentifier, bool enabled);
+    Q_SCRIPTABLE void prepareForDisplayOffWake();
 
 Q_SIGNALS:
     // DBus signals

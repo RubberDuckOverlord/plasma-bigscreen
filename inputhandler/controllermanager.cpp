@@ -141,7 +141,15 @@ void ControllerManager::emitPointerButton(int button, bool pressed)
 
 void ControllerManager::emitKey(Device *device, int key, bool pressed)
 {
-    if (!m_inputSystem || !device) {
+    if (!device) {
+        return;
+    }
+
+    if (pressed && consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
+    if (!m_inputSystem) {
         return;
     }
 
@@ -162,6 +170,10 @@ void ControllerManager::emitKey(Device *device, int key, bool pressed)
 
 void ControllerManager::emitPointerMotion(Device *device, double deltaX, double deltaY)
 {
+    if (consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
     if (!deviceAllowed(device) || !m_inputSystem) {
         return;
     }
@@ -171,7 +183,15 @@ void ControllerManager::emitPointerMotion(Device *device, double deltaX, double 
 
 void ControllerManager::emitPointerButton(Device *device, int button, bool pressed)
 {
-    if (!m_inputSystem || !device) {
+    if (!device) {
+        return;
+    }
+
+    if (pressed && consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
+    if (!m_inputSystem) {
         return;
     }
 
@@ -198,6 +218,10 @@ void ControllerManager::emitHomeAction()
 
 void ControllerManager::emitHomeAction(Device *device)
 {
+    if (consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
     if (!deviceAllowed(device)) {
         return;
     }
@@ -213,6 +237,10 @@ void ControllerManager::emitDisplayOffAction()
 
 void ControllerManager::emitDisplayOffAction(Device *device)
 {
+    if (consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
     if (!deviceAllowed(device)) {
         return;
     }
@@ -368,6 +396,12 @@ void ControllerManager::setStartButtonEnabledWhenSuppressed(const QString &uniqu
     Q_EMIT connectedControllersChanged();
 }
 
+void ControllerManager::prepareForDisplayOffWake()
+{
+    qDebug() << "Preparing to swallow the next display-off wake input";
+    m_swallowNextDisplayOffInput = true;
+}
+
 QVariantList ControllerManager::connectedControllers() const
 {
     QVariantList controllers;
@@ -417,6 +451,17 @@ bool ControllerManager::deviceAllowed(Device *device) const
     }
 
     return false;
+}
+
+bool ControllerManager::consumeDisplayOffWakeInput(Device *device)
+{
+    if (!m_swallowNextDisplayOffInput || !deviceAllowed(device)) {
+        return false;
+    }
+
+    m_swallowNextDisplayOffInput = false;
+    qDebug() << "Swallowed display-off wake input from" << device->getName();
+    return true;
 }
 
 Device *ControllerManager::deviceForUniqueIdentifier(const QString &uniqueIdentifier) const

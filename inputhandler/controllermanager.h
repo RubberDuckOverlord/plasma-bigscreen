@@ -50,6 +50,7 @@ public:
 
     QVariantList connectedControllers() const;
     void releasePressedInput(Device *device);
+    void prepareForDisplayOffWake();
 
 public Q_SLOTS:
     void emitKey(int key, bool pressed);
@@ -76,6 +77,7 @@ Q_SIGNALS:
 
 private:
     bool deviceAllowed(Device *device) const;
+    bool consumeDisplayOffWakeInput(Device *device);
     Device *deviceForUniqueIdentifier(const QString &uniqueIdentifier) const;
     void releaseAllPressedInput();
     void releasePressedInput(DeviceType type);
@@ -92,4 +94,5 @@ private:
     QHash<Device *, QSet<int>> m_pressedPointerButtons;
     QSet<int> m_pressedKeysWithoutDevice;
     QSet<int> m_pressedPointerButtonsWithoutDevice;
+    bool m_swallowNextDisplayOffInput = false;
 };
