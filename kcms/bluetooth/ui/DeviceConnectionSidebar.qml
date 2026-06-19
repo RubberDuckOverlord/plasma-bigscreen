@@ -106,6 +106,25 @@ Bigscreen.SidebarOverlay {
         refreshInputReadiness();
     }
 
+    function resetTransientOperationState(clearAutoConnect) {
+        operationSerial++;
+        operationTimeoutTimer.stop();
+        connectAfterPairTimer.stop();
+        inputConnectionRetryTimer.stop();
+
+        connecting = false;
+        disconnecting = false;
+        operationError = "";
+        connectAfterPair = false;
+        connectAfterPairAttempts = 0;
+        inputConnectionRetryAttempts = 0;
+        inputReadinessRefreshAttempts = 0;
+
+        if (clearAutoConnect) {
+            autoConnectOnOpen = false;
+        }
+    }
+
     function startAutoConnectOnOpen() {
         if (!autoConnectOnOpen) {
             return;
@@ -296,10 +315,9 @@ Bigscreen.SidebarOverlay {
         resetInputReadinessPolling();
         Qt.callLater(startAutoConnectOnOpen);
     }
+    onClosed: resetTransientOperationState(true)
     onDeviceChanged: {
-        inputConnectionRetryTimer.stop();
-        inputConnectionRetryAttempts = 0;
-        inputReadinessRefreshAttempts = 0;
+        resetTransientOperationState(false);
     }
 
     header: Bigscreen.SidebarOverlayHeader {
