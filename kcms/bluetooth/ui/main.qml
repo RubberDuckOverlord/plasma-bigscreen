@@ -40,18 +40,35 @@ Bigscreen.ScrollablePage {
 
     function startDiscovery() {
         if (!bluetoothReady) {
+            discoveryStopTimer.stop();
             return;
         }
 
         discoveryError = "";
+        discoveryStopTimer.restart();
+        if (discovering) {
+            return;
+        }
+
         Script.makeCall(usableAdapter.startDiscovery(), call => {
             if (call.error) {
                 discoveryError = call.errorText;
+                discoveryStopTimer.stop();
             }
         });
     }
 
+    function stopDiscovery() {
+        discoveryStopTimer.stop();
+        if (!discovering) {
+            return;
+        }
+
+        Script.makeCall(usableAdapter.stopDiscovery(), () => {});
+    }
+
     function openDeviceSidebar(device, focusDelegate, autoConnectOnOpen) {
+        stopDiscovery();
         sidebarOverlay.delegate = focusDelegate;
         sidebarOverlay.autoConnectOnOpen = autoConnectOnOpen || false;
         sidebarOverlay.device = device;
@@ -62,11 +79,16 @@ Bigscreen.ScrollablePage {
         target: manager
 
         onUsableAdapterChanged: {
-            bluetoothView.startDiscovery();
+            if (bluetoothView.bluetoothReady) {
+                bluetoothView.startDiscovery();
+            } else {
+                bluetoothView.stopDiscovery();
+            }
         }
     }
 
     Component.onCompleted: startDiscovery()
+    Component.onDestruction: stopDiscovery()
 
     onActiveFocusChanged: {
         if (activeFocus) {
@@ -80,6 +102,13 @@ Bigscreen.ScrollablePage {
         interval: 500
         repeat: false
         onTriggered: bluetoothView.startDiscovery()
+    }
+
+    Timer {
+        id: discoveryStopTimer
+        interval: 60000
+        repeat: false
+        onTriggered: bluetoothView.stopDiscovery()
     }
 
     DevicesProxyModel {
@@ -129,6 +158,8 @@ Bigscreen.ScrollablePage {
 
                 if (bluetoothStatus) {
                     discoveryRestartTimer.restart();
+                } else {
+                    bluetoothView.stopDiscovery();
                 }
 
                 checked = Qt.binding(() => BluezQt.Manager.bluetoothOperational);
