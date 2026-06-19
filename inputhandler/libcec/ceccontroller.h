@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "../inputaction.h"
+
 #include <QHash>
 #include <QObject>
 #include <QSet>
@@ -53,12 +55,17 @@ private Q_SLOTS:
     void onCecKeyPressed(int keycode, int duration);
 
 private:
+    struct CecInputBinding {
+        InputAction action = InputAction::None;
+        int nativeKey = -1;
+    };
+
     QThread *m_workerThread = nullptr;
     CECWorker *m_worker = nullptr;
     QTimer m_hotplugTimer;
     QTimer m_nextKeyTimer;
 
-    QHash<int, int> m_keyMap;
+    QHash<int, CecInputBinding> m_keyMap;
     QSet<int> m_homeActionKeys;
     QSet<QString> m_connectedDevices;
     Device *m_device = nullptr;

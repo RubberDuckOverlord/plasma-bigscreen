@@ -13,6 +13,7 @@
 
 #include "device.h"
 #include "devicewatcher.h"
+#include "inputaction.h"
 
 #include <SDL3/SDL.h>
 
@@ -65,10 +66,11 @@ private Q_SLOTS:
 
 private:
     void initializeUsedKeys();
-    void setKey(int key, bool pressed);
-    void setDirectionalKeys(int newDirection, int &currentDirection, int negativeKey, int positiveKey);
+    void setAction(InputAction action, bool pressed);
+    void setKey(InputAction action, int key, bool pressed);
+    void setDirectionalAction(int newDirection, int &currentDirection, InputAction negativeAction, InputAction positiveAction);
     void updateMouseTimer();
-    bool inputAllowedWhileSuppressed(int key);
+    bool inputAllowedWhileSuppressed(InputAction action);
 
     SdlController *const m_controller;
     SDL_Gamepad *const m_gamepad = nullptr;
@@ -79,9 +81,8 @@ private:
 
     QSet<int> m_pressedKeys;
 
-    // Button mappings from SDL gamepad buttons to keyboard keys
-    const QMap<SDL_GamepadButton, QList<int>> m_buttons;
-    const QMap<int, QList<int>> m_joystickButtons;
+    const QMap<SDL_GamepadButton, QList<InputAction>> m_buttons;
+    const QMap<int, QList<InputAction>> m_joystickButtons;
 
     // Axis state for direction tracking (left stick -> keyboard)
     int m_axisLeftXDirection = 0; // -1 left, 0 center, 1 right

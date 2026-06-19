@@ -24,6 +24,7 @@ target_sources(plasma-bigscreen-inputhandler PRIVATE
     sdlcontroller.cpp
     device.cpp
     devicewatcher.cpp
+    inputaction.cpp
     inputhandlerdbus.cpp
     ${inputhandler_dbus_SRCS}
 )

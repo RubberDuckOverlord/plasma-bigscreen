@@ -191,44 +191,43 @@ static QString joystickUniqueIdentifier(SDL_Joystick *joystick, SDL_JoystickID i
     return QStringLiteral("guid:%1").arg(guidString(SDL_GetJoystickGUIDForID(instanceId)));
 }
 
-static QMap<SDL_GamepadButton, QList<int>> gamepadButtonMappings(SdlControllerFamily family)
+static QMap<SDL_GamepadButton, QList<InputAction>> gamepadButtonMappings(SdlControllerFamily family)
 {
-    QMap<SDL_GamepadButton, QList<int>> mappings = {
-        // Same mappings as evdev backend
-        {SDL_GAMEPAD_BUTTON_GUIDE, {KEY_LEFTMETA}}, // BTN_MODE -> Meta
-        {SDL_GAMEPAD_BUTTON_START, {KEY_GAMES}}, // BTN_START -> Games
-        {SDL_GAMEPAD_BUTTON_SOUTH, {KEY_ENTER}}, // BTN_SOUTH (A/Cross) -> Enter
-        {SDL_GAMEPAD_BUTTON_EAST, {KEY_CANCEL, KEY_ESC}}, // BTN_EAST (B/Circle) -> Cancel/Escape
-        {SDL_GAMEPAD_BUTTON_WEST, {KEY_MENU}}, // BTN_WEST (X/Square) -> Menu
-        {SDL_GAMEPAD_BUTTON_NORTH, {KEY_UNKNOWN}}, // BTN_NORTH (Y/Triangle) - no evdev mapping
-        {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, {KEY_LEFTSHIFT, KEY_TAB}}, // BTN_TL -> Shift+Tab (previous)
-        {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, {KEY_TAB}}, // BTN_TR -> Tab (next)
-        {SDL_GAMEPAD_BUTTON_BACK, {KEY_BACK}}, // Select/Back -> Back
-        {SDL_GAMEPAD_BUTTON_DPAD_UP, {KEY_UP}}, // D-Pad Up
-        {SDL_GAMEPAD_BUTTON_DPAD_DOWN, {KEY_DOWN}}, // D-Pad Down
-        {SDL_GAMEPAD_BUTTON_DPAD_LEFT, {KEY_LEFT}}, // D-Pad Left
-        {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, {KEY_RIGHT}}, // D-Pad Right
-        {SDL_GAMEPAD_BUTTON_LEFT_STICK, {KEY_UNKNOWN}}, // Left stick click
-        {SDL_GAMEPAD_BUTTON_RIGHT_STICK, {KEY_UNKNOWN}}, // Right stick click
+    QMap<SDL_GamepadButton, QList<InputAction>> mappings = {
+        {SDL_GAMEPAD_BUTTON_GUIDE, {InputAction::Home}},
+        {SDL_GAMEPAD_BUTTON_START, {InputAction::SystemMenu}},
+        {SDL_GAMEPAD_BUTTON_SOUTH, {InputAction::Select}},
+        {SDL_GAMEPAD_BUTTON_EAST, {InputAction::Back}},
+        {SDL_GAMEPAD_BUTTON_WEST, {InputAction::Menu}},
+        {SDL_GAMEPAD_BUTTON_NORTH, {InputAction::None}},
+        {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, {InputAction::Previous}},
+        {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, {InputAction::Next}},
+        {SDL_GAMEPAD_BUTTON_BACK, {InputAction::BrowserBack}},
+        {SDL_GAMEPAD_BUTTON_DPAD_UP, {InputAction::NavigateUp}},
+        {SDL_GAMEPAD_BUTTON_DPAD_DOWN, {InputAction::NavigateDown}},
+        {SDL_GAMEPAD_BUTTON_DPAD_LEFT, {InputAction::NavigateLeft}},
+        {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, {InputAction::NavigateRight}},
+        {SDL_GAMEPAD_BUTTON_LEFT_STICK, {InputAction::None}},
+        {SDL_GAMEPAD_BUTTON_RIGHT_STICK, {InputAction::None}},
     };
 
     switch (family) {
     case SdlControllerFamily::Xbox:
         // Xbox Series share button: useful as an explicit contextual menu action in Bigscreen.
-        mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {KEY_MENU});
+        mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {InputAction::Menu});
         break;
     case SdlControllerFamily::PlayStation:
         // DualShock/DualSense touchpad click is a natural menu/control surface affordance.
-        mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {KEY_MENU});
+        mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {InputAction::Menu});
         break;
     case SdlControllerFamily::Steam:
-        mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {KEY_GAMES}); // QAM/Steam menu
-        mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {KEY_ENTER}); // Left/primary trackpad click
-        mappings.insert(SDL_GAMEPAD_BUTTON_MISC2, {KEY_MENU}); // Right/secondary trackpad click
-        mappings.insert(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, {KEY_TAB});
-        mappings.insert(SDL_GAMEPAD_BUTTON_LEFT_PADDLE1, {KEY_LEFTSHIFT, KEY_TAB});
-        mappings.insert(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2, {KEY_FORWARD});
-        mappings.insert(SDL_GAMEPAD_BUTTON_LEFT_PADDLE2, {KEY_BACK});
+        mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {InputAction::SystemMenu}); // QAM/Steam menu
+        mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {InputAction::Select}); // Left/primary trackpad click
+        mappings.insert(SDL_GAMEPAD_BUTTON_MISC2, {InputAction::Menu}); // Right/secondary trackpad click
+        mappings.insert(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, {InputAction::Next});
+        mappings.insert(SDL_GAMEPAD_BUTTON_LEFT_PADDLE1, {InputAction::Previous});
+        mappings.insert(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2, {InputAction::BrowserForward});
+        mappings.insert(SDL_GAMEPAD_BUTTON_LEFT_PADDLE2, {InputAction::BrowserBack});
         break;
     case SdlControllerFamily::Generic:
         break;
@@ -237,18 +236,18 @@ static QMap<SDL_GamepadButton, QList<int>> gamepadButtonMappings(SdlControllerFa
     return mappings;
 }
 
-static QMap<int, QList<int>> joystickButtonMappings()
+static QMap<int, QList<InputAction>> joystickButtonMappings()
 {
     return {
-        {0, {KEY_ENTER}},
-        {1, {KEY_CANCEL, KEY_ESC}},
-        {2, {KEY_MENU}},
-        {3, {KEY_UNKNOWN}},
-        {4, {KEY_LEFTSHIFT, KEY_TAB}},
-        {5, {KEY_TAB}},
-        {6, {KEY_BACK}},
-        {7, {KEY_GAMES}},
-        {8, {KEY_LEFTMETA}},
+        {0, {InputAction::Select}},
+        {1, {InputAction::Back}},
+        {2, {InputAction::Menu}},
+        {3, {InputAction::None}},
+        {4, {InputAction::Previous}},
+        {5, {InputAction::Next}},
+        {6, {InputAction::BrowserBack}},
+        {7, {InputAction::SystemMenu}},
+        {8, {InputAction::Home}},
     };
 }
 
@@ -580,28 +579,26 @@ SdlDevice::SdlDevice(SDL_Joystick *joystick, SDL_JoystickID instanceId, SdlContr
 void SdlDevice::initializeUsedKeys()
 {
     QSet<int> keys;
-    auto addKeyCombination = [&keys](const QList<int> &keyCombination) {
-        for (int key : keyCombination) {
-            if (key != KEY_UNKNOWN) {
-                keys.insert(key);
-            }
-        }
+    auto addActions = [&keys](const QList<InputAction> &actions) {
+        keys.unite(keysForInputActions(actions));
     };
 
-    for (const QList<int> &keyCombination : m_buttons) {
-        addKeyCombination(keyCombination);
+    for (const QList<InputAction> &actions : m_buttons) {
+        addActions(actions);
     }
-    for (const QList<int> &keyCombination : m_joystickButtons) {
-        addKeyCombination(keyCombination);
+    for (const QList<InputAction> &actions : m_joystickButtons) {
+        addActions(actions);
     }
 
     // Add keys produced by axes, hats and triggers.
-    keys.insert(KEY_UP);
-    keys.insert(KEY_DOWN);
-    keys.insert(KEY_LEFT);
-    keys.insert(KEY_RIGHT);
-    keys.insert(KEY_BACK);
-    keys.insert(KEY_FORWARD);
+    keys.unite(keysForInputActions({
+        InputAction::NavigateUp,
+        InputAction::NavigateDown,
+        InputAction::NavigateLeft,
+        InputAction::NavigateRight,
+        InputAction::BrowserBack,
+        InputAction::BrowserForward,
+    }));
 
     setUsedKeys(keys);
 
@@ -653,22 +650,34 @@ void SdlDevice::updateMouseMovement()
     }
 }
 
-bool SdlDevice::inputAllowedWhileSuppressed(int key)
+bool SdlDevice::inputAllowedWhileSuppressed(InputAction action)
 {
     if (!m_controller->isSuppressInput()) {
         return true;
     }
 
-    if (key != KEY_LEFTMETA && key != KEY_GAMES) {
+    if (!inputActionAllowedWhenSuppressed(action)) {
         return false;
     }
 
     return ControllerManager::instance().startButtonEnabledWhenSuppressed(getUniqueIdentifier());
 }
 
-void SdlDevice::setKey(int key, bool pressed)
+void SdlDevice::setAction(InputAction action, bool pressed)
 {
-    if (key == KEY_UNKNOWN) {
+    if (action == InputAction::None) {
+        return;
+    }
+
+    const QList<int> keyCodes = keysForInputAction(action);
+    for (int key : keyCodes) {
+        setKey(action, key, pressed);
+    }
+}
+
+void SdlDevice::setKey(InputAction action, int key, bool pressed)
+{
+    if (key < 0) {
         return;
     }
 
@@ -683,12 +692,11 @@ void SdlDevice::setKey(int key, bool pressed)
     }
 
     // When suppressed, only allow selected system keys through.
-    if (!inputAllowedWhileSuppressed(key)) {
+    if (!inputAllowedWhileSuppressed(action)) {
         return;
     }
 
-    // Turn left meta into home action directly
-    if (key == KEY_LEFTMETA) {
+    if (inputActionEmitsHome(action)) {
         if (pressed) {
             ControllerManager::instance().emitHomeAction(this);
         }
@@ -698,22 +706,22 @@ void SdlDevice::setKey(int key, bool pressed)
     ControllerManager::instance().emitKey(this, key, pressed);
 }
 
-void SdlDevice::setDirectionalKeys(int newDirection, int &currentDirection, int negativeKey, int positiveKey)
+void SdlDevice::setDirectionalAction(int newDirection, int &currentDirection, InputAction negativeAction, InputAction positiveAction)
 {
     if (newDirection == currentDirection) {
         return;
     }
 
     if (currentDirection == -1) {
-        setKey(negativeKey, false);
+        setAction(negativeAction, false);
     } else if (currentDirection == 1) {
-        setKey(positiveKey, false);
+        setAction(positiveAction, false);
     }
 
     if (newDirection == -1) {
-        setKey(negativeKey, true);
+        setAction(negativeAction, true);
     } else if (newDirection == 1) {
-        setKey(positiveKey, true);
+        setAction(positiveAction, true);
     }
 
     currentDirection = newDirection;
@@ -751,11 +759,9 @@ void SdlDevice::processButtonEvent(const SDL_GamepadButtonEvent &event)
         return;
     }
 
-    auto keyCodes = m_buttons.value(button);
-    if (!keyCodes.isEmpty()) {
-        for (int key : keyCodes) {
-            setKey(key, pressed);
-        }
+    const QList<InputAction> actions = m_buttons.value(button);
+    for (InputAction action : actions) {
+        setAction(action, pressed);
     }
 }
 
@@ -772,7 +778,7 @@ void SdlDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
         } else if (value < -AXIS_THRESHOLD) {
             newDirection = -1; // Left
         }
-        setDirectionalKeys(newDirection, m_axisLeftXDirection, KEY_LEFT, KEY_RIGHT);
+        setDirectionalAction(newDirection, m_axisLeftXDirection, InputAction::NavigateLeft, InputAction::NavigateRight);
     }
     // Handle left stick Y axis (up/down navigation)
     else if (axis == SDL_GAMEPAD_AXIS_LEFTY) {
@@ -782,17 +788,17 @@ void SdlDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
         } else if (value < -AXIS_THRESHOLD) {
             newDirection = -1; // Up
         }
-        setDirectionalKeys(newDirection, m_axisLeftYDirection, KEY_UP, KEY_DOWN);
+        setDirectionalAction(newDirection, m_axisLeftYDirection, InputAction::NavigateUp, InputAction::NavigateDown);
     }
     // Handle left trigger (L2)
     else if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER) {
         bool pressed = (value > AXIS_THRESHOLD);
-        setKey(KEY_BACK, pressed);
+        setAction(InputAction::BrowserBack, pressed);
     }
     // Handle right trigger (R2)
     else if (axis == SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) {
         bool pressed = (value > AXIS_THRESHOLD);
-        setKey(KEY_FORWARD, pressed);
+        setAction(InputAction::BrowserForward, pressed);
     }
     // Handle right stick X axis (mouse horizontal movement)
     else if (axis == SDL_GAMEPAD_AXIS_RIGHTX) {
@@ -811,9 +817,9 @@ void SdlDevice::processJoystickButtonEvent(const SDL_JoyButtonEvent &event)
     const bool pressed = (event.down != 0);
     qDebug() << "Joystick button event:" << event.button << "pressed:" << pressed;
 
-    const auto keyCodes = m_joystickButtons.value(event.button);
-    for (int key : keyCodes) {
-        setKey(key, pressed);
+    const QList<InputAction> actions = m_joystickButtons.value(event.button);
+    for (InputAction action : actions) {
+        setAction(action, pressed);
     }
 }
 
@@ -828,7 +834,7 @@ void SdlDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
         } else if (value < -AXIS_THRESHOLD) {
             newDirection = -1;
         }
-        setDirectionalKeys(newDirection, m_axisLeftXDirection, KEY_LEFT, KEY_RIGHT);
+        setDirectionalAction(newDirection, m_axisLeftXDirection, InputAction::NavigateLeft, InputAction::NavigateRight);
     } else if (event.axis == 1) {
         int newDirection = 0;
         if (value > AXIS_THRESHOLD) {
@@ -836,7 +842,7 @@ void SdlDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
         } else if (value < -AXIS_THRESHOLD) {
             newDirection = -1;
         }
-        setDirectionalKeys(newDirection, m_axisLeftYDirection, KEY_UP, KEY_DOWN);
+        setDirectionalAction(newDirection, m_axisLeftYDirection, InputAction::NavigateUp, InputAction::NavigateDown);
     } else if (event.axis == 2) {
         m_rightStickX = value;
         updateMouseTimer();
@@ -844,9 +850,9 @@ void SdlDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
         m_rightStickY = value;
         updateMouseTimer();
     } else if (event.axis == 4) {
-        setKey(KEY_BACK, value > AXIS_THRESHOLD);
+        setAction(InputAction::BrowserBack, value > AXIS_THRESHOLD);
     } else if (event.axis == 5) {
-        setKey(KEY_FORWARD, value > AXIS_THRESHOLD);
+        setAction(InputAction::BrowserForward, value > AXIS_THRESHOLD);
     }
 }
 
@@ -855,6 +861,6 @@ void SdlDevice::processJoystickHatEvent(const SDL_JoyHatEvent &event)
     const int newXDirection = (event.value & SDL_HAT_LEFT) ? -1 : ((event.value & SDL_HAT_RIGHT) ? 1 : 0);
     const int newYDirection = (event.value & SDL_HAT_UP) ? -1 : ((event.value & SDL_HAT_DOWN) ? 1 : 0);
 
-    setDirectionalKeys(newXDirection, m_hatXDirection, KEY_LEFT, KEY_RIGHT);
-    setDirectionalKeys(newYDirection, m_hatYDirection, KEY_UP, KEY_DOWN);
+    setDirectionalAction(newXDirection, m_hatXDirection, InputAction::NavigateLeft, InputAction::NavigateRight);
+    setDirectionalAction(newYDirection, m_hatYDirection, InputAction::NavigateUp, InputAction::NavigateDown);
 }
