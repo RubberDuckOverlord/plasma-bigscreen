@@ -57,6 +57,23 @@ void DevicesProxyModel::setInputDevicesOnly(bool inputDevicesOnly)
     Q_EMIT rowCountChanged();
 }
 
+bool DevicesProxyModel::controllerDevicesOnly() const
+{
+    return m_controllerDevicesOnly;
+}
+
+void DevicesProxyModel::setControllerDevicesOnly(bool controllerDevicesOnly)
+{
+    if (m_controllerDevicesOnly == controllerDevicesOnly) {
+        return;
+    }
+
+    m_controllerDevicesOnly = controllerDevicesOnly;
+    invalidateFilter();
+    Q_EMIT controllerDevicesOnlyChanged();
+    Q_EMIT rowCountChanged();
+}
+
 bool DevicesProxyModel::pairedOnly() const
 {
     return m_pairedOnly;
@@ -166,6 +183,15 @@ bool DevicesProxyModel::isInputDevice(const QModelIndex &idx) const
     return isLikelyControllerName(idx.data(BluezQt::DevicesModel::NameRole).toString());
 }
 
+bool DevicesProxyModel::isControllerDevice(const QModelIndex &idx) const
+{
+    if (static_cast<BluezQt::Device::Type>(idx.data(BluezQt::DevicesModel::TypeRole).toInt()) == BluezQt::Device::Joypad) {
+        return true;
+    }
+
+    return isLikelyControllerName(idx.data(BluezQt::DevicesModel::NameRole).toString());
+}
+
 bool DevicesProxyModel::isLikelyControllerName(const QString &name) const
 {
     static const QStringList controllerNameFragments = {
@@ -211,11 +237,21 @@ bool DevicesProxyModel::filterAcceptsRow(int source_row, const QModelIndex &sour
 
     const bool paired = sourceModel()->data(index, BluezQt::DevicesModel::PairedRole).toBool();
     if (m_pairedOnly) {
-        return paired && (!m_inputDevicesOnly || isInputDevice(index));
+        if (!paired) {
+            return false;
+        }
+        if (m_controllerDevicesOnly) {
+            return isControllerDevice(index);
+        }
+        return !m_inputDevicesOnly || isInputDevice(index);
     }
 
     if (paired) {
         return false;
+    }
+
+    if (m_controllerDevicesOnly) {
+        return isControllerDevice(index) || isUnresolvedDeviceName(index);
     }
 
     if (m_inputDevicesOnly) {

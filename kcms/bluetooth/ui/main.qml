@@ -96,14 +96,14 @@ Bigscreen.ScrollablePage {
     DevicesProxyModel {
         id: controllerCandidatesModel
         pairedOnly: false
-        inputDevicesOnly: true
+        controllerDevicesOnly: true
         sourceModel: BluezQt.DevicesModel {}
     }
 
     DevicesProxyModel {
         id: knownControllersModel
         pairedOnly: true
-        inputDevicesOnly: true
+        controllerDevicesOnly: true
         sourceModel: BluezQt.DevicesModel {}
     }
 
