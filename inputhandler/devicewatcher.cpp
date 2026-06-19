@@ -58,7 +58,13 @@ DeviceWatcher::~DeviceWatcher()
 
 void DeviceWatcher::addDevicePath(const QString &devicePath)
 {
-    if (devicePath.isEmpty() || m_devicePaths.contains(devicePath) || m_inotifyFd < 0) {
+    if (devicePath.isEmpty() || m_inotifyFd < 0) {
+        return;
+    }
+
+    auto refIt = m_devicePathRefs.find(devicePath);
+    if (refIt != m_devicePathRefs.end()) {
+        ++refIt.value();
         return;
     }
 
@@ -70,6 +76,7 @@ void DeviceWatcher::addDevicePath(const QString &devicePath)
     }
 
     m_devicePaths.insert(devicePath);
+    m_devicePathRefs.insert(devicePath, 1);
     m_watchDescriptors.insert(wd, devicePath);
 
     // Initial check
@@ -78,6 +85,17 @@ void DeviceWatcher::addDevicePath(const QString &devicePath)
 
 void DeviceWatcher::removeDevicePath(const QString &devicePath)
 {
+    auto refIt = m_devicePathRefs.find(devicePath);
+    if (refIt == m_devicePathRefs.end()) {
+        return;
+    }
+
+    if (refIt.value() > 1) {
+        --refIt.value();
+        return;
+    }
+
+    m_devicePathRefs.erase(refIt);
     if (!m_devicePaths.remove(devicePath)) {
         return;
     }

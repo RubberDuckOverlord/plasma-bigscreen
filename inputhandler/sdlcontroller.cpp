@@ -9,6 +9,8 @@
 #include "inputhandlersettings.h"
 
 #include <QByteArray>
+#include <QDir>
+#include <QFileInfo>
 #include <QStringList>
 
 #include <fcntl.h>
@@ -49,6 +51,49 @@ static QString joystickName(SDL_Joystick *joystick)
     auto name = SDL_GetJoystickName(joystick);
     QString deviceName = name ? QString::fromUtf8(name) : QString();
     return deviceName.isEmpty() ? QStringLiteral("Joystick") : deviceName;
+}
+
+static QString inputDeviceSysfsTarget(const QString &inputNode)
+{
+    if (inputNode.isEmpty()) {
+        return {};
+    }
+
+    const QString devicePath = QStringLiteral("/sys/class/input/%1/device").arg(inputNode);
+    return QFileInfo(devicePath).canonicalFilePath();
+}
+
+static QStringList relatedInputDevicePaths(const QString &devicePath)
+{
+    if (devicePath.isEmpty()) {
+        return {};
+    }
+
+    QSet<QString> paths{devicePath};
+    const QString canonicalDevicePath = QFileInfo(devicePath).canonicalFilePath();
+    if (!canonicalDevicePath.isEmpty()) {
+        paths.insert(canonicalDevicePath);
+    }
+
+    const QString inputNode = QFileInfo(canonicalDevicePath.isEmpty() ? devicePath : canonicalDevicePath).fileName();
+    const QString sysfsTarget = inputDeviceSysfsTarget(inputNode);
+    if (sysfsTarget.isEmpty()) {
+        QStringList result = paths.values();
+        result.sort();
+        return result;
+    }
+
+    QDir inputDir(QStringLiteral("/sys/class/input"));
+    const QStringList inputNodes = inputDir.entryList({QStringLiteral("event*"), QStringLiteral("js*")}, QDir::AllEntries | QDir::NoDotAndDotDot);
+    for (const QString &node : inputNodes) {
+        if (inputDeviceSysfsTarget(node) == sysfsTarget) {
+            paths.insert(QStringLiteral("/dev/input/%1").arg(node));
+        }
+    }
+
+    QStringList result = paths.values();
+    result.sort();
+    return result;
 }
 
 static bool nameMatchesAny(const QString &name, const QStringList &values)
@@ -557,9 +602,7 @@ void SdlController::addGamepadDevice(SDL_JoystickID instanceId)
     auto device = new SdlGamepadDevice(gamepad, instanceId, this);
     m_devices.insert(instanceId, device);
 
-    // Register the device path with the watcher
-    QString devicePath = gamepadPath(gamepad);
-    if (!devicePath.isEmpty()) {
+    for (const QString &devicePath : device->devicePaths()) {
         m_deviceWatcher->addDevicePath(devicePath);
     }
 
@@ -590,8 +633,8 @@ void SdlController::addJoystickDevice(SDL_JoystickID instanceId)
     auto device = new SdlJoystickDevice(joystick, instanceId, this);
     m_devices.insert(instanceId, device);
 
-    if (!device->devicePath().isEmpty()) {
-        m_deviceWatcher->addDevicePath(device->devicePath());
+    for (const QString &devicePath : device->devicePaths()) {
+        m_deviceWatcher->addDevicePath(devicePath);
     }
 
     ControllerManager::instance().newDevice(device);
@@ -613,8 +656,8 @@ void SdlController::removeDevice(SDL_JoystickID instanceId)
     QString deviceName = device->getName();
     qInfo() << "Removing SDL controller:" << deviceName;
 
-    if (!device->devicePath().isEmpty()) {
-        m_deviceWatcher->removeDevicePath(device->devicePath());
+    for (const QString &devicePath : device->devicePaths()) {
+        m_deviceWatcher->removeDevicePath(devicePath);
     }
 
     ControllerManager::instance().deviceRemoved(device);
@@ -633,6 +676,7 @@ SdlDevice::SdlDevice(QString name, QString uniqueIdentifier, QString devicePath,
     , m_controller(controller)
     , m_instanceId(instanceId)
     , m_devicePath(std::move(devicePath))
+    , m_devicePaths(relatedInputDevicePaths(m_devicePath))
     , m_controllerFamily(family)
 {
     setControllerFamily(controllerFamilyId(m_controllerFamily), controllerFamilyName(m_controllerFamily));

@@ -43,6 +43,7 @@ private:
     QSocketNotifier *m_notifier = nullptr;
     QTimer *m_recheckTimer = nullptr;
     QHash<int, QString> m_watchDescriptors; // wd -> device path
+    QHash<QString, int> m_devicePathRefs;
     QSet<QString> m_devicePaths;
     bool m_othersUsingDevice = false;
     qint64 m_myPid;

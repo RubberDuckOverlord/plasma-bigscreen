@@ -9,6 +9,7 @@
 #include <QMap>
 #include <QObject>
 #include <QSet>
+#include <QStringList>
 #include <QTimer>
 
 #include "device.h"
@@ -38,6 +39,10 @@ public:
     QString devicePath() const
     {
         return m_devicePath;
+    }
+    QStringList devicePaths() const
+    {
+        return m_devicePaths;
     }
     SDL_JoystickID instanceId() const
     {
@@ -86,6 +91,7 @@ private:
 
     SDL_JoystickID m_instanceId;
     const QString m_devicePath;
+    const QStringList m_devicePaths;
     const SdlControllerFamily m_controllerFamily;
 
     QSet<int> m_pressedKeys;
