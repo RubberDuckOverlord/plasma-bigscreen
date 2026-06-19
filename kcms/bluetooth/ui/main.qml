@@ -51,8 +51,9 @@ Bigscreen.ScrollablePage {
         });
     }
 
-    function openDeviceSidebar(device, focusDelegate) {
+    function openDeviceSidebar(device, focusDelegate, autoConnectOnOpen) {
         sidebarOverlay.delegate = focusDelegate;
+        sidebarOverlay.autoConnectOnOpen = autoConnectOnOpen || false;
         sidebarOverlay.device = device;
         sidebarOverlay.open();
     }
@@ -318,7 +319,7 @@ Bigscreen.ScrollablePage {
 
                     onClicked: {
                         controllerSetupDialog.close();
-                        bluetoothView.openDeviceSidebar(model.Device, addControllerButton);
+                        bluetoothView.openDeviceSidebar(model.Device, addControllerButton, !model.Connected);
                     }
                 }
             }

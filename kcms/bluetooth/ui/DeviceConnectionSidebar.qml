@@ -22,6 +22,7 @@ Bigscreen.SidebarOverlay {
     property bool connecting: false
     property bool disconnecting: false
     property string operationError: ""
+    property bool autoConnectOnOpen: false
     property bool connectAfterPair: false
     property int connectAfterPairAttempts: 0
     property int inputConnectionRetryAttempts: 0
@@ -103,6 +104,18 @@ Bigscreen.SidebarOverlay {
     function resetInputReadinessPolling() {
         inputReadinessRefreshAttempts = 0;
         refreshInputReadiness();
+    }
+
+    function startAutoConnectOnOpen() {
+        if (!autoConnectOnOpen) {
+            return;
+        }
+
+        autoConnectOnOpen = false;
+        if (device && Script.isInputDevice(device) && device.paired && !device.connected && !connecting && !disconnecting) {
+            operationError = "";
+            startDeviceConnection(false);
+        }
     }
 
     function finishOperation(call, fallbackError, connectAfterSuccess, serial) {
@@ -279,7 +292,10 @@ Bigscreen.SidebarOverlay {
         }
     }
 
-    onOpened: resetInputReadinessPolling()
+    onOpened: {
+        resetInputReadinessPolling();
+        Qt.callLater(startAutoConnectOnOpen);
+    }
     onDeviceChanged: {
         inputConnectionRetryTimer.stop();
         inputConnectionRetryAttempts = 0;
