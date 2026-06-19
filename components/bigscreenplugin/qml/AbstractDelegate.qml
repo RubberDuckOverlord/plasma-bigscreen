@@ -56,9 +56,14 @@ QQC2.ItemDelegate {
     bottomInset: Kirigami.Units.largeSpacing
 
 
-    Keys.onReturnPressed: {
+    function activateFromKeyboard(event) {
         clicked();
+        event.accepted = true;
     }
+
+    Keys.onReturnPressed: event => activateFromKeyboard(event)
+    Keys.onEnterPressed: event => activateFromKeyboard(event)
+    Keys.onSpacePressed: event => activateFromKeyboard(event)
 
     contentItem: Item {}
 
