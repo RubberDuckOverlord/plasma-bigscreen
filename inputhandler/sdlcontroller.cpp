@@ -802,6 +802,13 @@ void SdlDevice::setKey(InputAction action, int key, bool pressed)
         return;
     }
 
+    if (inputActionRequestsDisplayOff(action)) {
+        if (pressed) {
+            ControllerManager::instance().emitDisplayOffAction(this);
+        }
+        return;
+    }
+
     ControllerManager::instance().emitKey(this, key, pressed);
 }
 

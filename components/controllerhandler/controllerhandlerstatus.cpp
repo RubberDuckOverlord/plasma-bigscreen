@@ -55,6 +55,7 @@ void ControllerHandlerStatus::connectToService()
     bus.connect(SERVICE, PATH, IFACE, QStringLiteral("enabledChanged"), this, SLOT(onEnabledChanged(bool)));
     bus.connect(SERVICE, PATH, IFACE, QStringLiteral("gameControllerEnabledChanged"), this, SLOT(onGameControllerEnabledChanged(bool)));
     bus.connect(SERVICE, PATH, IFACE, QStringLiteral("homeActionRequested"), this, SIGNAL(homeActionRequested()));
+    bus.connect(SERVICE, PATH, IFACE, QStringLiteral("displayOffActionRequested"), this, SIGNAL(displayOffActionRequested()));
 
     m_serviceAvailable = true;
     Q_EMIT serviceAvailableChanged();
@@ -74,6 +75,7 @@ void ControllerHandlerStatus::disconnectFromService()
         bus.disconnect(SERVICE, PATH, IFACE, QStringLiteral("enabledChanged"), this, SLOT(onEnabledChanged(bool)));
         bus.disconnect(SERVICE, PATH, IFACE, QStringLiteral("gameControllerEnabledChanged"), this, SLOT(onGameControllerEnabledChanged(bool)));
         bus.disconnect(SERVICE, PATH, IFACE, QStringLiteral("homeActionRequested"), this, SIGNAL(homeActionRequested()));
+        bus.disconnect(SERVICE, PATH, IFACE, QStringLiteral("displayOffActionRequested"), this, SIGNAL(displayOffActionRequested()));
 
         delete m_dbusInterface;
         m_dbusInterface = nullptr;

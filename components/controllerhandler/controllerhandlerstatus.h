@@ -52,6 +52,7 @@ Q_SIGNALS:
     void cecControllerAdded(const QString &name);
     void cecControllerRemoved(const QString &name);
     void homeActionRequested();
+    void displayOffActionRequested();
 
 private Q_SLOTS:
     void connectToService();

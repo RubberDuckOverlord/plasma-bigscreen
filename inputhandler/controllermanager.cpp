@@ -205,6 +205,21 @@ void ControllerManager::emitHomeAction(Device *device)
     emitHomeAction();
 }
 
+void ControllerManager::emitDisplayOffAction()
+{
+    qDebug() << "Display off action invoked";
+    Q_EMIT displayOffActionRequested();
+}
+
+void ControllerManager::emitDisplayOffAction(Device *device)
+{
+    if (!deviceAllowed(device)) {
+        return;
+    }
+
+    emitDisplayOffAction();
+}
+
 ControllerManager::~ControllerManager()
 {
     releaseAllPressedInput();

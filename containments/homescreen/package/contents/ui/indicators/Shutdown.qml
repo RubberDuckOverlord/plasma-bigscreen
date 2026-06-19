@@ -14,12 +14,49 @@ AbstractIndicator {
     icon.name: Bigscreen.Global.launchReason === "swap" ? "window-close" : "system-shutdown"
     text: (Bigscreen.Global.launchReason === "swap") ? i18n("Exit Bigscreen") : i18n("Power")
 
+    Bigscreen.Dialog {
+        id: powerDialog
+        title: i18n("Power")
+        openFocusItem: turnScreenOffButton
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            Bigscreen.ButtonDelegate {
+                id: turnScreenOffButton
+                Layout.fillWidth: true
+                icon.name: "video-display"
+                text: i18n("Turn Screen Off")
+                description: i18n("Keep apps and downloads running while the TV or monitor enters standby.")
+                KeyNavigation.down: powerOptionsButton
+
+                onClicked: {
+                    powerDialog.close();
+                    Bigscreen.Global.turnOffScreen();
+                }
+            }
+
+            Bigscreen.ButtonDelegate {
+                id: powerOptionsButton
+                Layout.fillWidth: true
+                icon.name: "system-shutdown"
+                text: i18n("Power Options")
+                description: i18n("Shut down, restart, suspend, or log out.")
+                KeyNavigation.up: turnScreenOffButton
+
+                onClicked: {
+                    powerDialog.close();
+                    Bigscreen.Global.promptLogoutGreeter("promptAll");
+                }
+            }
+        }
+    }
+
     onClicked: (event)=> {
         if (Bigscreen.Global.launchReason === "swap") {
             Bigscreen.Global.swapSession();
         } else {
-            // Prompt all since we don't have any other way of doing it.
-            Bigscreen.Global.promptLogoutGreeter("promptAll");
+            powerDialog.open();
         }
     }
 }

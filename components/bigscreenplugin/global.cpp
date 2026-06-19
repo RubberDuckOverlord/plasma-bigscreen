@@ -90,6 +90,25 @@ void Global::promptLogoutGreeter(const QString message)
     QDBusConnection::sessionBus().asyncCall(msg);
 }
 
+void Global::turnOffScreen()
+{
+    QDBusMessage msg = QDBusMessage::createMethodCall(QStringLiteral("org.kde.kglobalaccel"),
+                                                      QStringLiteral("/component/org_kde_powerdevil"),
+                                                      QStringLiteral("org.kde.kglobalaccel.Component"),
+                                                      QStringLiteral("invokeShortcut"));
+    msg.setArguments({QStringLiteral("Turn Off Screen")});
+
+    auto watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(msg), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [watcher]() {
+        watcher->deleteLater();
+
+        const QDBusPendingReply<> reply = *watcher;
+        if (reply.isError()) {
+            qWarning() << "Turn off screen request failed:" << reply.error().message();
+        }
+    });
+}
+
 QString Global::launchReason() const
 {
     const QString launchReason = qgetenv("PLASMA_BIGSCREEN_LAUNCH_REASON");

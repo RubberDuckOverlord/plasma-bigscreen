@@ -48,11 +48,13 @@ enum class InputAction {
     ChannelDown,
     Subtitle,
     Info,
+    DisplayOff,
 };
 
 QList<int> keysForInputAction(InputAction action);
 QSet<int> keysForInputActions(const QList<InputAction> &actions);
 InputAction inputActionForKey(int key);
 bool inputActionEmitsHome(InputAction action);
+bool inputActionRequestsDisplayOff(InputAction action);
 bool inputActionAllowedWhenSuppressed(InputAction action);
 QString inputActionName(InputAction action);

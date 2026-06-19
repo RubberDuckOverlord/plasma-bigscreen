@@ -60,12 +60,15 @@ public Q_SLOTS:
     void emitPointerButton(Device *device, int button, bool pressed);
     void emitHomeAction();
     void emitHomeAction(Device *device);
+    void emitDisplayOffAction();
+    void emitDisplayOffAction(Device *device);
     void removeDevice(int deviceIndex);
 
 Q_SIGNALS:
     void deviceConnected(Device *);
     void deviceDisconnected(Device *);
     void homeActionRequested();
+    void displayOffActionRequested();
     void enabledChanged(bool enabled);
     void gameControllerEnabledChanged(bool enabled);
     void cecEnabledChanged(bool enabled);

@@ -83,6 +83,8 @@ QList<int> keysForInputAction(InputAction action)
         return {KEY_SUBTITLE};
     case InputAction::Info:
         return {KEY_INFO};
+    case InputAction::DisplayOff:
+        return {KEY_POWER};
     case InputAction::None:
         return {};
     }
@@ -176,6 +178,9 @@ InputAction inputActionForKey(int key)
         return InputAction::Subtitle;
     case KEY_INFO:
         return InputAction::Info;
+    case KEY_POWER:
+    case KEY_POWER2:
+        return InputAction::DisplayOff;
     default:
         return InputAction::None;
     }
@@ -186,9 +191,14 @@ bool inputActionEmitsHome(InputAction action)
     return action == InputAction::Home;
 }
 
+bool inputActionRequestsDisplayOff(InputAction action)
+{
+    return action == InputAction::DisplayOff;
+}
+
 bool inputActionAllowedWhenSuppressed(InputAction action)
 {
-    return action == InputAction::Home || action == InputAction::SystemMenu;
+    return action == InputAction::Home || action == InputAction::SystemMenu || action == InputAction::DisplayOff;
 }
 
 QString inputActionName(InputAction action)
@@ -266,6 +276,8 @@ QString inputActionName(InputAction action)
         return QStringLiteral("subtitle");
     case InputAction::Info:
         return QStringLiteral("info");
+    case InputAction::DisplayOff:
+        return QStringLiteral("display-off");
     case InputAction::None:
         return QStringLiteral("none");
     }

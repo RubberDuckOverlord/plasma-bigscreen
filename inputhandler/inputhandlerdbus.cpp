@@ -33,6 +33,7 @@ InputHandlerDBus::InputHandlerDBus(QObject *parent)
     }
 
     connect(&ControllerManager::instance(), &ControllerManager::homeActionRequested, this, &InputHandlerDBus::homeActionRequested);
+    connect(&ControllerManager::instance(), &ControllerManager::displayOffActionRequested, this, &InputHandlerDBus::displayOffActionRequested);
     connect(&ControllerManager::instance(), &ControllerManager::enabledChanged, this, &InputHandlerDBus::enabledChanged);
     connect(&ControllerManager::instance(), &ControllerManager::gameControllerEnabledChanged, this, &InputHandlerDBus::gameControllerEnabledChanged);
     connect(&ControllerManager::instance(), &ControllerManager::cecEnabledChanged, this, &InputHandlerDBus::cecEnabledChanged);

@@ -96,6 +96,7 @@ CECController::CECController(QObject *parent)
         map("Home", CEC_USER_CONTROL_CODE_ROOT_MENU, KEY_HOMEPAGE),
         map("Subtitle", CEC_USER_CONTROL_CODE_SUB_PICTURE, KEY_SUBTITLE),
         map("Info", CEC_USER_CONTROL_CODE_DISPLAY_INFORMATION, KEY_INFO),
+        map("Power", CEC_USER_CONTROL_CODE_POWER, KEY_POWER),
     };
 
     m_homeActionKeys = {
@@ -278,6 +279,12 @@ void CECController::onCecKeyPressed(int keycode, int duration)
             return;
         }
 
+        if (inputActionRequestsDisplayOff(binding.action)) {
+            qDebug() << "CECController: Power key detected, emitting display off action";
+            ControllerManager::instance().emitDisplayOffAction(m_device);
+            return;
+        }
+
         const QList<int> keys = keysForInputAction(binding.action);
         for (int key : keys) {
             ControllerManager::instance().emitKey(m_device, key, 1);
@@ -293,6 +300,12 @@ void CECController::onCecKeyPressed(int keycode, int duration)
     if (binding.nativeKey == KEY_HOMEPAGE) {
         qDebug() << "CECController: Home key detected, emitting home action";
         ControllerManager::instance().emitHomeAction(m_device);
+        return;
+    }
+
+    if (binding.nativeKey == KEY_POWER || binding.nativeKey == KEY_POWER2) {
+        qDebug() << "CECController: Power key detected, emitting display off action";
+        ControllerManager::instance().emitDisplayOffAction(m_device);
         return;
     }
 

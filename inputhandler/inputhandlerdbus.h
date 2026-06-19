@@ -71,6 +71,7 @@ Q_SIGNALS:
     Q_SCRIPTABLE void inputSuppressedChanged(bool suppressed, bool automatic);
     Q_SCRIPTABLE void autoSuppressInputChanged(bool enabled);
     Q_SCRIPTABLE void homeActionRequested();
+    Q_SCRIPTABLE void displayOffActionRequested();
     Q_SCRIPTABLE void enabledChanged(bool enabled);
     Q_SCRIPTABLE void gameControllerEnabledChanged(bool enabled);
     Q_SCRIPTABLE void cecEnabledChanged(bool enabled);
