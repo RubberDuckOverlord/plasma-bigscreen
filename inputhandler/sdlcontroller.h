@@ -18,6 +18,13 @@
 
 class SdlController;
 
+enum class SdlControllerFamily {
+    Generic,
+    Xbox,
+    PlayStation,
+    Steam,
+};
+
 class SdlDevice : public Device
 {
     Q_OBJECT
@@ -68,6 +75,7 @@ private:
     SDL_Joystick *const m_joystick = nullptr;
     SDL_JoystickID m_instanceId;
     const QString m_devicePath;
+    const SdlControllerFamily m_controllerFamily;
 
     QSet<int> m_pressedKeys;
 

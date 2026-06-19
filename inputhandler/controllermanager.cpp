@@ -363,6 +363,10 @@ QVariantList ControllerManager::connectedControllers() const
         controller.insert(QStringLiteral("iconName"), device->iconName());
         controller.insert(QStringLiteral("controllerEnabled"), controllerEnabled(device->getUniqueIdentifier()));
         controller.insert(QStringLiteral("startButtonEnabledWhenSuppressed"), startButtonEnabledWhenSuppressed(device->getUniqueIdentifier()));
+        if (!device->controllerFamilyId().isEmpty()) {
+            controller.insert(QStringLiteral("controllerFamily"), device->controllerFamilyId());
+            controller.insert(QStringLiteral("controllerFamilyName"), device->controllerFamilyName());
+        }
 
         switch (device->getDeviceType()) {
         case DeviceCEC:

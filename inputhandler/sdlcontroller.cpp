@@ -9,6 +9,7 @@
 #include "inputhandlersettings.h"
 
 #include <QByteArray>
+#include <QStringList>
 
 #include <fcntl.h>
 #include <linux/input-event-codes.h>
@@ -47,6 +48,93 @@ static QString joystickName(SDL_Joystick *joystick)
     auto name = SDL_GetJoystickName(joystick);
     QString deviceName = name ? QString::fromUtf8(name) : QString();
     return deviceName.isEmpty() ? QStringLiteral("Joystick") : deviceName;
+}
+
+static bool nameMatchesAny(const QString &name, const QStringList &values)
+{
+    for (const QString &value : values) {
+        if (name.contains(value, Qt::CaseInsensitive)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static SdlControllerFamily familyFromName(const QString &deviceName)
+{
+    if (nameMatchesAny(deviceName, {QStringLiteral("steam")})) {
+        return SdlControllerFamily::Steam;
+    }
+    if (nameMatchesAny(deviceName, {QStringLiteral("xbox"), QStringLiteral("xinput")})) {
+        return SdlControllerFamily::Xbox;
+    }
+    if (nameMatchesAny(deviceName,
+                       {
+                           QStringLiteral("playstation"),
+                           QStringLiteral("dualshock"),
+                           QStringLiteral("dualsense"),
+                           QStringLiteral("sony"),
+                           QStringLiteral("wireless controller"),
+                       })) {
+        return SdlControllerFamily::PlayStation;
+    }
+    return SdlControllerFamily::Generic;
+}
+
+static SdlControllerFamily gamepadFamily(SDL_Gamepad *gamepad)
+{
+    const QString deviceName = gamepadName(gamepad);
+    SdlControllerFamily family = familyFromName(deviceName);
+    if (family != SdlControllerFamily::Generic) {
+        return family;
+    }
+
+    switch (SDL_GetGamepadType(gamepad)) {
+    case SDL_GAMEPAD_TYPE_XBOX360:
+    case SDL_GAMEPAD_TYPE_XBOXONE:
+        return SdlControllerFamily::Xbox;
+    case SDL_GAMEPAD_TYPE_PS3:
+    case SDL_GAMEPAD_TYPE_PS4:
+    case SDL_GAMEPAD_TYPE_PS5:
+        return SdlControllerFamily::PlayStation;
+    default:
+        return SdlControllerFamily::Generic;
+    }
+}
+
+static SdlControllerFamily joystickFamily(SDL_Joystick *joystick)
+{
+    return familyFromName(joystickName(joystick));
+}
+
+static QString controllerFamilyId(SdlControllerFamily family)
+{
+    switch (family) {
+    case SdlControllerFamily::Xbox:
+        return QStringLiteral("xbox");
+    case SdlControllerFamily::PlayStation:
+        return QStringLiteral("playstation");
+    case SdlControllerFamily::Steam:
+        return QStringLiteral("steam");
+    case SdlControllerFamily::Generic:
+        return QStringLiteral("generic");
+    }
+    return QStringLiteral("generic");
+}
+
+static QString controllerFamilyName(SdlControllerFamily family)
+{
+    switch (family) {
+    case SdlControllerFamily::Xbox:
+        return QStringLiteral("Xbox");
+    case SdlControllerFamily::PlayStation:
+        return QStringLiteral("PlayStation");
+    case SdlControllerFamily::Steam:
+        return QStringLiteral("Steam Controller");
+    case SdlControllerFamily::Generic:
+        return QStringLiteral("Generic Controller");
+    }
+    return QStringLiteral("Generic Controller");
 }
 
 static QString evdevUniqueIdentifier(const QString &devicePath)
@@ -103,9 +191,9 @@ static QString joystickUniqueIdentifier(SDL_Joystick *joystick, SDL_JoystickID i
     return QStringLiteral("guid:%1").arg(guidString(SDL_GetJoystickGUIDForID(instanceId)));
 }
 
-static QMap<SDL_GamepadButton, QList<int>> gamepadButtonMappings()
+static QMap<SDL_GamepadButton, QList<int>> gamepadButtonMappings(SdlControllerFamily family)
 {
-    return {
+    QMap<SDL_GamepadButton, QList<int>> mappings = {
         // Same mappings as evdev backend
         {SDL_GAMEPAD_BUTTON_GUIDE, {KEY_LEFTMETA}}, // BTN_MODE -> Meta
         {SDL_GAMEPAD_BUTTON_START, {KEY_GAMES}}, // BTN_START -> Games
@@ -123,6 +211,30 @@ static QMap<SDL_GamepadButton, QList<int>> gamepadButtonMappings()
         {SDL_GAMEPAD_BUTTON_LEFT_STICK, {KEY_UNKNOWN}}, // Left stick click
         {SDL_GAMEPAD_BUTTON_RIGHT_STICK, {KEY_UNKNOWN}}, // Right stick click
     };
+
+    switch (family) {
+    case SdlControllerFamily::Xbox:
+        // Xbox Series share button: useful as an explicit contextual menu action in Bigscreen.
+        mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {KEY_MENU});
+        break;
+    case SdlControllerFamily::PlayStation:
+        // DualShock/DualSense touchpad click is a natural menu/control surface affordance.
+        mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {KEY_MENU});
+        break;
+    case SdlControllerFamily::Steam:
+        mappings.insert(SDL_GAMEPAD_BUTTON_MISC1, {KEY_GAMES}); // QAM/Steam menu
+        mappings.insert(SDL_GAMEPAD_BUTTON_TOUCHPAD, {KEY_ENTER}); // Left/primary trackpad click
+        mappings.insert(SDL_GAMEPAD_BUTTON_MISC2, {KEY_MENU}); // Right/secondary trackpad click
+        mappings.insert(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE1, {KEY_TAB});
+        mappings.insert(SDL_GAMEPAD_BUTTON_LEFT_PADDLE1, {KEY_LEFTSHIFT, KEY_TAB});
+        mappings.insert(SDL_GAMEPAD_BUTTON_RIGHT_PADDLE2, {KEY_FORWARD});
+        mappings.insert(SDL_GAMEPAD_BUTTON_LEFT_PADDLE2, {KEY_BACK});
+        break;
+    case SdlControllerFamily::Generic:
+        break;
+    }
+
+    return mappings;
 }
 
 static QMap<int, QList<int>> joystickButtonMappings()
@@ -440,11 +552,13 @@ SdlDevice::SdlDevice(SDL_Gamepad *gamepad, SDL_JoystickID instanceId, SdlControl
     , m_gamepad(gamepad)
     , m_instanceId(instanceId)
     , m_devicePath(gamepadPath(gamepad))
-    , m_buttons(gamepadButtonMappings())
+    , m_controllerFamily(gamepadFamily(gamepad))
+    , m_buttons(gamepadButtonMappings(m_controllerFamily))
     , m_joystickButtons(joystickButtonMappings())
 {
+    setControllerFamily(controllerFamilyId(m_controllerFamily), controllerFamilyName(m_controllerFamily));
     initializeUsedKeys();
-    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier;
+    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier << "family:" << controllerFamilyId(m_controllerFamily);
 }
 
 SdlDevice::SdlDevice(SDL_Joystick *joystick, SDL_JoystickID instanceId, SdlController *controller)
@@ -453,11 +567,14 @@ SdlDevice::SdlDevice(SDL_Joystick *joystick, SDL_JoystickID instanceId, SdlContr
     , m_joystick(joystick)
     , m_instanceId(instanceId)
     , m_devicePath(joystickPath(joystick))
-    , m_buttons(gamepadButtonMappings())
+    , m_controllerFamily(joystickFamily(joystick))
+    , m_buttons(gamepadButtonMappings(m_controllerFamily))
     , m_joystickButtons(joystickButtonMappings())
 {
+    setControllerFamily(controllerFamilyId(m_controllerFamily), controllerFamilyName(m_controllerFamily));
     initializeUsedKeys();
-    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier << "backend: joystick";
+    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier << "backend: joystick"
+             << "family:" << controllerFamilyId(m_controllerFamily);
 }
 
 void SdlDevice::initializeUsedKeys()
