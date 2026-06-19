@@ -24,11 +24,20 @@ class SdlDevice : public Device
 
 public:
     explicit SdlDevice(SDL_Gamepad *gamepad, SDL_JoystickID instanceId, SdlController *controller);
+    explicit SdlDevice(SDL_Joystick *joystick, SDL_JoystickID instanceId, SdlController *controller);
     ~SdlDevice() override;
 
     SDL_Gamepad *gamepad() const
     {
         return m_gamepad;
+    }
+    bool isGamepad() const
+    {
+        return m_gamepad != nullptr;
+    }
+    QString devicePath() const
+    {
+        return m_devicePath;
     }
     SDL_JoystickID instanceId() const
     {
@@ -37,6 +46,9 @@ public:
 
     void processButtonEvent(const SDL_GamepadButtonEvent &event);
     void processAxisEvent(const SDL_GamepadAxisEvent &event);
+    void processJoystickButtonEvent(const SDL_JoyButtonEvent &event);
+    void processJoystickAxisEvent(const SDL_JoyAxisEvent &event);
+    void processJoystickHatEvent(const SDL_JoyHatEvent &event);
 
 Q_SIGNALS:
     void keyPress(int keyCode, bool pressed);
@@ -45,20 +57,29 @@ private Q_SLOTS:
     void updateMouseMovement();
 
 private:
+    void initializeUsedKeys();
     void setKey(int key, bool pressed);
+    void setDirectionalKeys(int newDirection, int &currentDirection, int negativeKey, int positiveKey);
+    void updateMouseTimer();
+    bool inputAllowedWhileSuppressed(int key);
 
     SdlController *const m_controller;
-    SDL_Gamepad *const m_gamepad;
+    SDL_Gamepad *const m_gamepad = nullptr;
+    SDL_Joystick *const m_joystick = nullptr;
     SDL_JoystickID m_instanceId;
+    const QString m_devicePath;
 
     QSet<int> m_pressedKeys;
 
     // Button mappings from SDL gamepad buttons to keyboard keys
     const QMap<SDL_GamepadButton, QList<int>> m_buttons;
+    const QMap<int, QList<int>> m_joystickButtons;
 
     // Axis state for direction tracking (left stick -> keyboard)
     int m_axisLeftXDirection = 0; // -1 left, 0 center, 1 right
     int m_axisLeftYDirection = 0; // -1 up, 0 center, 1 down
+    int m_hatXDirection = 0;
+    int m_hatYDirection = 0;
 
     // Right stick state for mouse movement
     double m_rightStickX = 0.0;
@@ -108,7 +129,8 @@ private Q_SLOTS:
     void poll();
 
 private:
-    void addDevice(SDL_JoystickID instanceId);
+    void addGamepadDevice(SDL_JoystickID instanceId);
+    void addJoystickDevice(SDL_JoystickID instanceId);
     void removeDevice(SDL_JoystickID instanceId);
     void releasePressedInput();
     void updateAutomaticSuppression();

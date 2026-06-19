@@ -18,6 +18,11 @@
 
 static bool s_sdlInitialized = false;
 
+static QString guidString(SDL_GUID guid)
+{
+    return QString::fromLatin1(QByteArray(reinterpret_cast<const char *>(guid.data), sizeof(guid.data)).toHex());
+}
+
 static QString gamepadPath(SDL_Gamepad *gamepad)
 {
     auto path = SDL_GetGamepadPath(gamepad);
@@ -31,7 +36,20 @@ static QString gamepadName(SDL_Gamepad *gamepad)
     return deviceName.isEmpty() ? QStringLiteral("Game Controller") : deviceName;
 }
 
-static QString gamepadEvdevUniqueIdentifier(const QString &devicePath)
+static QString joystickPath(SDL_Joystick *joystick)
+{
+    auto path = SDL_GetJoystickPath(joystick);
+    return path ? QString::fromUtf8(path) : QString();
+}
+
+static QString joystickName(SDL_Joystick *joystick)
+{
+    auto name = SDL_GetJoystickName(joystick);
+    QString deviceName = name ? QString::fromUtf8(name) : QString();
+    return deviceName.isEmpty() ? QStringLiteral("Joystick") : deviceName;
+}
+
+static QString evdevUniqueIdentifier(const QString &devicePath)
 {
     if (devicePath.isEmpty()) {
         return {};
@@ -61,14 +79,65 @@ static QString gamepadUniqueIdentifier(SDL_Gamepad *gamepad, SDL_JoystickID inst
         return QStringLiteral("serial:%1").arg(serialNumber);
     }
 
-    QString evdevUniqueIdentifier = gamepadEvdevUniqueIdentifier(gamepadPath(gamepad));
-    if (!evdevUniqueIdentifier.isEmpty()) {
-        return QStringLiteral("evdev:%1").arg(evdevUniqueIdentifier);
+    QString uniqueIdentifier = evdevUniqueIdentifier(gamepadPath(gamepad));
+    if (!uniqueIdentifier.isEmpty()) {
+        return QStringLiteral("evdev:%1").arg(uniqueIdentifier);
     }
 
-    SDL_GUID guid = SDL_GetGamepadGUIDForID(instanceId);
-    QString guidString = QString::fromLatin1(QByteArray(reinterpret_cast<const char *>(guid.data), sizeof(guid.data)).toHex());
-    return QStringLiteral("guid:%1").arg(guidString);
+    return QStringLiteral("guid:%1").arg(guidString(SDL_GetGamepadGUIDForID(instanceId)));
+}
+
+static QString joystickUniqueIdentifier(SDL_Joystick *joystick, SDL_JoystickID instanceId)
+{
+    auto serial = SDL_GetJoystickSerial(joystick);
+    QString serialNumber = serial ? QString::fromUtf8(serial) : QString();
+    if (!serialNumber.isEmpty()) {
+        return QStringLiteral("serial:%1").arg(serialNumber);
+    }
+
+    QString uniqueIdentifier = evdevUniqueIdentifier(joystickPath(joystick));
+    if (!uniqueIdentifier.isEmpty()) {
+        return QStringLiteral("evdev:%1").arg(uniqueIdentifier);
+    }
+
+    return QStringLiteral("guid:%1").arg(guidString(SDL_GetJoystickGUIDForID(instanceId)));
+}
+
+static QMap<SDL_GamepadButton, QList<int>> gamepadButtonMappings()
+{
+    return {
+        // Same mappings as evdev backend
+        {SDL_GAMEPAD_BUTTON_GUIDE, {KEY_LEFTMETA}}, // BTN_MODE -> Meta
+        {SDL_GAMEPAD_BUTTON_START, {KEY_GAMES}}, // BTN_START -> Games
+        {SDL_GAMEPAD_BUTTON_SOUTH, {KEY_ENTER}}, // BTN_SOUTH (A/Cross) -> Enter
+        {SDL_GAMEPAD_BUTTON_EAST, {KEY_CANCEL, KEY_ESC}}, // BTN_EAST (B/Circle) -> Cancel/Escape
+        {SDL_GAMEPAD_BUTTON_WEST, {KEY_MENU}}, // BTN_WEST (X/Square) -> Menu
+        {SDL_GAMEPAD_BUTTON_NORTH, {KEY_UNKNOWN}}, // BTN_NORTH (Y/Triangle) - no evdev mapping
+        {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, {KEY_LEFTSHIFT, KEY_TAB}}, // BTN_TL -> Shift+Tab (previous)
+        {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, {KEY_TAB}}, // BTN_TR -> Tab (next)
+        {SDL_GAMEPAD_BUTTON_BACK, {KEY_BACK}}, // Select/Back -> Back
+        {SDL_GAMEPAD_BUTTON_DPAD_UP, {KEY_UP}}, // D-Pad Up
+        {SDL_GAMEPAD_BUTTON_DPAD_DOWN, {KEY_DOWN}}, // D-Pad Down
+        {SDL_GAMEPAD_BUTTON_DPAD_LEFT, {KEY_LEFT}}, // D-Pad Left
+        {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, {KEY_RIGHT}}, // D-Pad Right
+        {SDL_GAMEPAD_BUTTON_LEFT_STICK, {KEY_UNKNOWN}}, // Left stick click
+        {SDL_GAMEPAD_BUTTON_RIGHT_STICK, {KEY_UNKNOWN}}, // Right stick click
+    };
+}
+
+static QMap<int, QList<int>> joystickButtonMappings()
+{
+    return {
+        {0, {KEY_ENTER}},
+        {1, {KEY_CANCEL, KEY_ESC}},
+        {2, {KEY_MENU}},
+        {3, {KEY_UNKNOWN}},
+        {4, {KEY_LEFTSHIFT, KEY_TAB}},
+        {5, {KEY_TAB}},
+        {6, {KEY_BACK}},
+        {7, {KEY_GAMES}},
+        {8, {KEY_LEFTMETA}},
+    };
 }
 
 SdlController::SdlController()
@@ -76,17 +145,18 @@ SdlController::SdlController()
 {
     m_autoSuppressInput = InputHandlerSettings::self()->autoSuppressInput();
 
-    // Initialize SDL3 gamepad subsystem
+    // Initialize SDL3 gamepad and joystick subsystems. The gamepad API gives
+    // normalized layouts; the joystick API catches devices without mappings.
     if (!s_sdlInitialized) {
         // Prevent SDL from installing signal handlers that would block SIGINT (Ctrl+C)
         SDL_SetHint(SDL_HINT_NO_SIGNAL_HANDLERS, "1");
 
-        if (!SDL_Init(SDL_INIT_GAMEPAD)) {
-            qWarning() << "Failed to initialize SDL gamepad subsystem:" << SDL_GetError();
+        if (!SDL_Init(SDL_INIT_GAMEPAD | SDL_INIT_JOYSTICK)) {
+            qWarning() << "Failed to initialize SDL controller subsystems:" << SDL_GetError();
             return;
         }
         s_sdlInitialized = true;
-        qInfo() << "SDL3 gamepad subsystem initialized";
+        qInfo() << "SDL3 controller subsystems initialized";
     }
 
     // Watch for other processes listening to the controller
@@ -108,9 +178,21 @@ SdlController::SdlController()
     if (gamepadIds) {
         qInfo() << "Found" << numGamepads << "gamepad(s) at startup";
         for (int i = 0; i < numGamepads; ++i) {
-            addDevice(gamepadIds[i]);
+            addGamepadDevice(gamepadIds[i]);
         }
         SDL_free(gamepadIds);
+    }
+
+    int numJoysticks = 0;
+    SDL_JoystickID *joystickIds = SDL_GetJoysticks(&numJoysticks);
+    if (joystickIds) {
+        qInfo() << "Found" << numJoysticks << "joystick-capable device(s) at startup";
+        for (int i = 0; i < numJoysticks; ++i) {
+            if (!SDL_IsGamepad(joystickIds[i])) {
+                addJoystickDevice(joystickIds[i]);
+            }
+        }
+        SDL_free(joystickIds);
     }
 
     // Do an initial poll shortly after startup
@@ -139,7 +221,7 @@ void SdlController::poll()
         switch (event.type) {
         case SDL_EVENT_GAMEPAD_ADDED:
             qInfo() << "Gamepad added event, instance ID:" << event.gdevice.which;
-            addDevice(event.gdevice.which);
+            addGamepadDevice(event.gdevice.which);
             break;
 
         case SDL_EVENT_GAMEPAD_REMOVED:
@@ -157,6 +239,39 @@ void SdlController::poll()
         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
             if (m_devices.contains(event.gaxis.which)) {
                 m_devices.value(event.gaxis.which)->processAxisEvent(event.gaxis);
+            }
+            break;
+
+        case SDL_EVENT_JOYSTICK_ADDED:
+            if (!SDL_IsGamepad(event.jdevice.which)) {
+                qInfo() << "Joystick added event, instance ID:" << event.jdevice.which;
+                addJoystickDevice(event.jdevice.which);
+            }
+            break;
+
+        case SDL_EVENT_JOYSTICK_REMOVED:
+            if (m_devices.contains(event.jdevice.which) && !m_devices.value(event.jdevice.which)->isGamepad()) {
+                qInfo() << "Joystick removed event, instance ID:" << event.jdevice.which;
+                removeDevice(event.jdevice.which);
+            }
+            break;
+
+        case SDL_EVENT_JOYSTICK_BUTTON_DOWN:
+        case SDL_EVENT_JOYSTICK_BUTTON_UP:
+            if (m_devices.contains(event.jbutton.which) && !m_devices.value(event.jbutton.which)->isGamepad()) {
+                m_devices.value(event.jbutton.which)->processJoystickButtonEvent(event.jbutton);
+            }
+            break;
+
+        case SDL_EVENT_JOYSTICK_AXIS_MOTION:
+            if (m_devices.contains(event.jaxis.which) && !m_devices.value(event.jaxis.which)->isGamepad()) {
+                m_devices.value(event.jaxis.which)->processJoystickAxisEvent(event.jaxis);
+            }
+            break;
+
+        case SDL_EVENT_JOYSTICK_HAT_MOTION:
+            if (m_devices.contains(event.jhat.which) && !m_devices.value(event.jhat.which)->isGamepad()) {
+                m_devices.value(event.jhat.which)->processJoystickHatEvent(event.jhat);
             }
             break;
         }
@@ -229,7 +344,7 @@ void SdlController::releasePressedInput()
     }
 }
 
-void SdlController::addDevice(SDL_JoystickID instanceId)
+void SdlController::addGamepadDevice(SDL_JoystickID instanceId)
 {
     if (m_devices.contains(instanceId)) {
         qWarning() << "Device already exists, instance ID:" << instanceId;
@@ -262,6 +377,37 @@ void SdlController::addDevice(SDL_JoystickID instanceId)
     m_pollTimer->setInterval(SHORT_POLL_INTERVAL);
 }
 
+void SdlController::addJoystickDevice(SDL_JoystickID instanceId)
+{
+    if (m_devices.contains(instanceId)) {
+        qWarning() << "Device already exists, instance ID:" << instanceId;
+        return;
+    }
+
+    SDL_Joystick *joystick = SDL_OpenJoystick(instanceId);
+    if (!joystick) {
+        qWarning() << "Failed to open joystick:" << SDL_GetError();
+        return;
+    }
+
+    QString deviceName = joystickName(joystick);
+    qInfo() << "Adding SDL joystick:" << deviceName;
+
+    auto device = new SdlDevice(joystick, instanceId, this);
+    m_devices.insert(instanceId, device);
+
+    if (!device->devicePath().isEmpty()) {
+        m_deviceWatcher->addDevicePath(device->devicePath());
+    }
+
+    ControllerManager::instance().newDevice(device);
+
+    Q_EMIT controllerAdded(deviceName);
+
+    // Switch to faster polling when we have devices
+    m_pollTimer->setInterval(SHORT_POLL_INTERVAL);
+}
+
 void SdlController::removeDevice(SDL_JoystickID instanceId)
 {
     if (!m_devices.contains(instanceId)) {
@@ -271,12 +417,10 @@ void SdlController::removeDevice(SDL_JoystickID instanceId)
 
     auto device = m_devices.take(instanceId);
     QString deviceName = device->getName();
-    qInfo() << "Removing SDL gamepad:" << deviceName;
+    qInfo() << "Removing SDL controller:" << deviceName;
 
-    // Unregister the device path from the watcher
-    QString devicePath = gamepadPath(device->gamepad());
-    if (!devicePath.isEmpty()) {
-        m_deviceWatcher->removeDevicePath(devicePath);
+    if (!device->devicePath().isEmpty()) {
+        m_deviceWatcher->removeDevicePath(device->devicePath());
     }
 
     ControllerManager::instance().deviceRemoved(device);
@@ -295,41 +439,50 @@ SdlDevice::SdlDevice(SDL_Gamepad *gamepad, SDL_JoystickID instanceId, SdlControl
     , m_controller(controller)
     , m_gamepad(gamepad)
     , m_instanceId(instanceId)
-    , m_buttons({
-          // Same mappings as evdev backend
-          {SDL_GAMEPAD_BUTTON_GUIDE, {KEY_LEFTMETA}}, // BTN_MODE -> Meta
-          {SDL_GAMEPAD_BUTTON_START, {KEY_GAMES}}, // BTN_START -> Games
-          {SDL_GAMEPAD_BUTTON_SOUTH, {KEY_ENTER}}, // BTN_SOUTH (A/Cross) -> Enter
-          {SDL_GAMEPAD_BUTTON_EAST, {KEY_CANCEL, KEY_ESC}}, // BTN_EAST (B/Circle) -> Cancel/Escape
-          {SDL_GAMEPAD_BUTTON_WEST, {KEY_MENU}}, // BTN_WEST (X/Square) -> Menu
-          {SDL_GAMEPAD_BUTTON_NORTH, {KEY_UNKNOWN}}, // BTN_NORTH (Y/Triangle) - no evdev mapping
-          {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, {KEY_LEFTSHIFT, KEY_TAB}}, // BTN_TL -> Shift+Tab (previous)
-          {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, {KEY_TAB}}, // BTN_TR -> Tab (next)
-          {SDL_GAMEPAD_BUTTON_BACK, {KEY_BACK}}, // Select/Back -> Back
-          {SDL_GAMEPAD_BUTTON_DPAD_UP, {KEY_UP}}, // D-Pad Up
-          {SDL_GAMEPAD_BUTTON_DPAD_DOWN, {KEY_DOWN}}, // D-Pad Down
-          {SDL_GAMEPAD_BUTTON_DPAD_LEFT, {KEY_LEFT}}, // D-Pad Left
-          {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, {KEY_RIGHT}}, // D-Pad Right
-          {SDL_GAMEPAD_BUTTON_LEFT_STICK, {KEY_UNKNOWN}}, // Left stick click
-          {SDL_GAMEPAD_BUTTON_RIGHT_STICK, {KEY_UNKNOWN}}, // Right stick click
-      })
+    , m_devicePath(gamepadPath(gamepad))
+    , m_buttons(gamepadButtonMappings())
+    , m_joystickButtons(joystickButtonMappings())
 {
-    // Build set of used keys for ControllerManager
+    initializeUsedKeys();
+    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier;
+}
+
+SdlDevice::SdlDevice(SDL_Joystick *joystick, SDL_JoystickID instanceId, SdlController *controller)
+    : Device(DeviceGamepad, joystickName(joystick), joystickUniqueIdentifier(joystick, instanceId))
+    , m_controller(controller)
+    , m_joystick(joystick)
+    , m_instanceId(instanceId)
+    , m_devicePath(joystickPath(joystick))
+    , m_buttons(gamepadButtonMappings())
+    , m_joystickButtons(joystickButtonMappings())
+{
+    initializeUsedKeys();
+    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier << "backend: joystick";
+}
+
+void SdlDevice::initializeUsedKeys()
+{
     QSet<int> keys;
-    for (auto keyCombination : m_buttons) {
+    auto addKeyCombination = [&keys](const QList<int> &keyCombination) {
         for (int key : keyCombination) {
             if (key != KEY_UNKNOWN) {
                 keys.insert(key);
             }
         }
+    };
+
+    for (const QList<int> &keyCombination : m_buttons) {
+        addKeyCombination(keyCombination);
     }
-    // Add arrow keys for axis navigation
+    for (const QList<int> &keyCombination : m_joystickButtons) {
+        addKeyCombination(keyCombination);
+    }
+
+    // Add keys produced by axes, hats and triggers.
     keys.insert(KEY_UP);
     keys.insert(KEY_DOWN);
     keys.insert(KEY_LEFT);
     keys.insert(KEY_RIGHT);
-
-    // Add keys for triggers
     keys.insert(KEY_BACK);
     keys.insert(KEY_FORWARD);
 
@@ -339,8 +492,6 @@ SdlDevice::SdlDevice(SDL_Gamepad *gamepad, SDL_JoystickID instanceId, SdlControl
     m_mouseTimer = new QTimer(this);
     m_mouseTimer->setInterval(16);
     connect(m_mouseTimer, &QTimer::timeout, this, &SdlDevice::updateMouseMovement);
-
-    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier;
 }
 
 SdlDevice::~SdlDevice()
@@ -350,6 +501,9 @@ SdlDevice::~SdlDevice()
     }
     if (m_gamepad) {
         SDL_CloseGamepad(m_gamepad);
+    }
+    if (m_joystick) {
+        SDL_CloseJoystick(m_joystick);
     }
     qDebug() << "Destroyed SdlDevice:" << m_name;
 }
@@ -382,6 +536,19 @@ void SdlDevice::updateMouseMovement()
     }
 }
 
+bool SdlDevice::inputAllowedWhileSuppressed(int key)
+{
+    if (!m_controller->isSuppressInput()) {
+        return true;
+    }
+
+    if (key != KEY_LEFTMETA && key != KEY_GAMES) {
+        return false;
+    }
+
+    return ControllerManager::instance().startButtonEnabledWhenSuppressed(getUniqueIdentifier());
+}
+
 void SdlDevice::setKey(int key, bool pressed)
 {
     if (key == KEY_UNKNOWN) {
@@ -398,8 +565,8 @@ void SdlDevice::setKey(int key, bool pressed)
         m_pressedKeys.remove(key);
     }
 
-    // When suppressed, only allow selected system keys through
-    if (m_controller->isSuppressInput() && (key != KEY_LEFTMETA || !ControllerManager::instance().startButtonEnabledWhenSuppressed(getUniqueIdentifier()))) {
+    // When suppressed, only allow selected system keys through.
+    if (!inputAllowedWhileSuppressed(key)) {
         return;
     }
 
@@ -412,6 +579,37 @@ void SdlDevice::setKey(int key, bool pressed)
     }
 
     ControllerManager::instance().emitKey(this, key, pressed);
+}
+
+void SdlDevice::setDirectionalKeys(int newDirection, int &currentDirection, int negativeKey, int positiveKey)
+{
+    if (newDirection == currentDirection) {
+        return;
+    }
+
+    if (currentDirection == -1) {
+        setKey(negativeKey, false);
+    } else if (currentDirection == 1) {
+        setKey(positiveKey, false);
+    }
+
+    if (newDirection == -1) {
+        setKey(negativeKey, true);
+    } else if (newDirection == 1) {
+        setKey(positiveKey, true);
+    }
+
+    currentDirection = newDirection;
+}
+
+void SdlDevice::updateMouseTimer()
+{
+    const bool stickActive = (qAbs(m_rightStickX) > MOUSE_DEADZONE || qAbs(m_rightStickY) > MOUSE_DEADZONE);
+    if (stickActive && !m_mouseTimer->isActive()) {
+        m_mouseTimer->start();
+    } else if (!stickActive && m_mouseTimer->isActive()) {
+        m_mouseTimer->stop();
+    }
 }
 
 void SdlDevice::processButtonEvent(const SDL_GamepadButtonEvent &event)
@@ -457,24 +655,7 @@ void SdlDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
         } else if (value < -AXIS_THRESHOLD) {
             newDirection = -1; // Left
         }
-
-        if (newDirection != m_axisLeftXDirection) {
-            // Release old direction
-            if (m_axisLeftXDirection == -1) {
-                setKey(KEY_LEFT, false);
-            } else if (m_axisLeftXDirection == 1) {
-                setKey(KEY_RIGHT, false);
-            }
-
-            // Press new direction
-            if (newDirection == -1) {
-                setKey(KEY_LEFT, true);
-            } else if (newDirection == 1) {
-                setKey(KEY_RIGHT, true);
-            }
-
-            m_axisLeftXDirection = newDirection;
-        }
+        setDirectionalKeys(newDirection, m_axisLeftXDirection, KEY_LEFT, KEY_RIGHT);
     }
     // Handle left stick Y axis (up/down navigation)
     else if (axis == SDL_GAMEPAD_AXIS_LEFTY) {
@@ -484,24 +665,7 @@ void SdlDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
         } else if (value < -AXIS_THRESHOLD) {
             newDirection = -1; // Up
         }
-
-        if (newDirection != m_axisLeftYDirection) {
-            // Release old direction
-            if (m_axisLeftYDirection == -1) {
-                setKey(KEY_UP, false);
-            } else if (m_axisLeftYDirection == 1) {
-                setKey(KEY_DOWN, false);
-            }
-
-            // Press new direction
-            if (newDirection == -1) {
-                setKey(KEY_UP, true);
-            } else if (newDirection == 1) {
-                setKey(KEY_DOWN, true);
-            }
-
-            m_axisLeftYDirection = newDirection;
-        }
+        setDirectionalKeys(newDirection, m_axisLeftYDirection, KEY_UP, KEY_DOWN);
     }
     // Handle left trigger (L2)
     else if (axis == SDL_GAMEPAD_AXIS_LEFT_TRIGGER) {
@@ -516,23 +680,64 @@ void SdlDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
     // Handle right stick X axis (mouse horizontal movement)
     else if (axis == SDL_GAMEPAD_AXIS_RIGHTX) {
         m_rightStickX = value;
-        // Start/stop mouse timer based on stick activity
-        bool stickActive = (qAbs(m_rightStickX) > MOUSE_DEADZONE || qAbs(m_rightStickY) > MOUSE_DEADZONE);
-        if (stickActive && !m_mouseTimer->isActive()) {
-            m_mouseTimer->start();
-        } else if (!stickActive && m_mouseTimer->isActive()) {
-            m_mouseTimer->stop();
-        }
+        updateMouseTimer();
     }
     // Handle right stick Y axis (mouse vertical movement)
     else if (axis == SDL_GAMEPAD_AXIS_RIGHTY) {
         m_rightStickY = value;
-        // Start/stop mouse timer based on stick activity
-        bool stickActive = (qAbs(m_rightStickX) > MOUSE_DEADZONE || qAbs(m_rightStickY) > MOUSE_DEADZONE);
-        if (stickActive && !m_mouseTimer->isActive()) {
-            m_mouseTimer->start();
-        } else if (!stickActive && m_mouseTimer->isActive()) {
-            m_mouseTimer->stop();
-        }
+        updateMouseTimer();
     }
+}
+
+void SdlDevice::processJoystickButtonEvent(const SDL_JoyButtonEvent &event)
+{
+    const bool pressed = (event.down != 0);
+    qDebug() << "Joystick button event:" << event.button << "pressed:" << pressed;
+
+    const auto keyCodes = m_joystickButtons.value(event.button);
+    for (int key : keyCodes) {
+        setKey(key, pressed);
+    }
+}
+
+void SdlDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
+{
+    const int value = event.value;
+
+    if (event.axis == 0) {
+        int newDirection = 0;
+        if (value > AXIS_THRESHOLD) {
+            newDirection = 1;
+        } else if (value < -AXIS_THRESHOLD) {
+            newDirection = -1;
+        }
+        setDirectionalKeys(newDirection, m_axisLeftXDirection, KEY_LEFT, KEY_RIGHT);
+    } else if (event.axis == 1) {
+        int newDirection = 0;
+        if (value > AXIS_THRESHOLD) {
+            newDirection = 1;
+        } else if (value < -AXIS_THRESHOLD) {
+            newDirection = -1;
+        }
+        setDirectionalKeys(newDirection, m_axisLeftYDirection, KEY_UP, KEY_DOWN);
+    } else if (event.axis == 2) {
+        m_rightStickX = value;
+        updateMouseTimer();
+    } else if (event.axis == 3) {
+        m_rightStickY = value;
+        updateMouseTimer();
+    } else if (event.axis == 4) {
+        setKey(KEY_BACK, value > AXIS_THRESHOLD);
+    } else if (event.axis == 5) {
+        setKey(KEY_FORWARD, value > AXIS_THRESHOLD);
+    }
+}
+
+void SdlDevice::processJoystickHatEvent(const SDL_JoyHatEvent &event)
+{
+    const int newXDirection = (event.value & SDL_HAT_LEFT) ? -1 : ((event.value & SDL_HAT_RIGHT) ? 1 : 0);
+    const int newYDirection = (event.value & SDL_HAT_UP) ? -1 : ((event.value & SDL_HAT_DOWN) ? 1 : 0);
+
+    setDirectionalKeys(newXDirection, m_hatXDirection, KEY_LEFT, KEY_RIGHT);
+    setDirectionalKeys(newYDirection, m_hatYDirection, KEY_UP, KEY_DOWN);
 }
