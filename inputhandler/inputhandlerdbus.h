@@ -6,8 +6,12 @@
 
 #pragma once
 
+#include <QDBusContext>
+#include <QDBusServiceWatcher>
+#include <QHash>
 #include <QList>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
@@ -18,7 +22,7 @@ class SdlController;
 class CECController;
 #endif
 
-class InputHandlerDBus : public QObject
+class InputHandlerDBus : public QObject, protected QDBusContext
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.kde.plasma.bigscreen.inputhandler")
@@ -81,7 +85,13 @@ Q_SIGNALS:
     Q_SCRIPTABLE void connectedControllersChanged();
 
 private:
+    QString callerService() const;
+    bool sourceOwnedByOtherCallers(const QString &source, const QString &caller) const;
+    void releaseBigscreenInputFocusForCaller(const QString &caller);
+
     SdlController *m_sdlController = nullptr;
+    QDBusServiceWatcher *m_bigscreenInputFocusWatcher = nullptr;
+    QHash<QString, QSet<QString>> m_bigscreenInputFocusSourcesByCaller;
 
 #ifdef HAS_LIBCEC
     CECController *m_cecController = nullptr;
