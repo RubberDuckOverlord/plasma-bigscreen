@@ -39,13 +39,32 @@ Bigscreen.SidebarOverlay {
         return "";
     }
 
+    function primaryActionText() {
+        if (!device) {
+            return "";
+        }
+        if (connecting) {
+            return i18n("Connecting…");
+        }
+        if (disconnecting) {
+            return i18n("Disconnecting…");
+        }
+        if (device.connected) {
+            return Script.isInputDevice(device) ? i18n("Disconnect controller") : i18n("Disconnect");
+        }
+        if (!device.paired) {
+            return Script.isInputDevice(device) ? i18n("Pair controller") : i18n("Pair");
+        }
+        return Script.isInputDevice(device) ? i18n("Connect controller") : i18n("Connect");
+    }
+
     function markInputDeviceTrusted() {
         if (device && Script.isInputDevice(device) && device.paired && !device.trusted) {
             device.trusted = true;
         }
     }
 
-    function finishOperation(call, fallbackError) {
+    function finishOperation(call, fallbackError, connectAfterSuccess) {
         root.connecting = false;
         root.disconnecting = false;
 
@@ -56,6 +75,16 @@ Bigscreen.SidebarOverlay {
 
         root.operationError = "";
         markInputDeviceTrusted();
+
+        if (connectAfterSuccess && device && Script.isInputDevice(device) && device.paired && !device.connected) {
+            root.connecting = true;
+            Script.makeCall(device.connectToDevice(), connectCall => {
+                root.connecting = false;
+                if (connectCall.error) {
+                    root.operationError = connectCall.errorText || i18n("Connecting failed");
+                }
+            });
+        }
     }
 
     header: Bigscreen.SidebarOverlayHeader {
@@ -81,7 +110,7 @@ Bigscreen.SidebarOverlay {
         Bigscreen.ButtonDelegate {
             id: connectToggleButton
 
-            text: device ? (root.connecting ? i18n("Connecting…") : (root.disconnecting ? i18n("Disconnecting…") : (device.connected ? i18n("Disconnect") : (!device.paired ? i18n("Pair") : i18n("Connect"))))) : ""
+            text: root.primaryActionText()
             description: root.operationStatusText()
             icon.name: device ? (device.connected ? "network-disconnect" : "network-connect") : ""
             enabled: device && !root.connecting && !root.disconnecting
@@ -94,17 +123,17 @@ Bigscreen.SidebarOverlay {
                 if (!device.paired) {
                     root.connecting = true;
                     Script.makeCall(device.pair(), call => {
-                        root.finishOperation(call, i18n("Pairing failed"));
+                        root.finishOperation(call, i18n("Pairing failed"), true);
                     });
                 } else if (device.connected) {
                     root.disconnecting = true;
                     Script.makeCall(device.disconnectFromDevice(), call => {
-                        root.finishOperation(call, i18n("Disconnecting failed"));
+                        root.finishOperation(call, i18n("Disconnecting failed"), false);
                     });
                 } else {
                     root.connecting = true;
                     Script.makeCall(device.connectToDevice(), call => {
-                        root.finishOperation(call, i18n("Connecting failed"));
+                        root.finishOperation(call, i18n("Connecting failed"), false);
                     });
                 }
             }
