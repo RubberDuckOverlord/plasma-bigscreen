@@ -45,6 +45,8 @@ For CEC support, ensure that your user has permission to access the device:
 usermod -aG input $USER
 ```
 
+Keyboard-like devices, including Flirc remotes configured to emit keyboard keys, are handled by Plasma Bigscreen as normal keyboard input and do not need to be opened by `plasma-bigscreen-inputhandler`. For the best out-of-box navigation experience, configure those devices to emit the same keys Bigscreen uses for controller actions, such as arrow keys for navigation, Enter for select, Escape for back, Tab/Shift+Tab for next/previous focus, and the system menu/home keys where available.
+
 ### Test on a development machine
 
 It is recommended to use `kde-builder` to build this from source.

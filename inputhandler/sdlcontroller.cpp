@@ -15,6 +15,7 @@
 #include <linux/input-event-codes.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
+#include <utility>
 #include <unistd.h>
 
 static bool s_sdlInitialized = false;
@@ -251,6 +252,16 @@ static QMap<int, QList<InputAction>> joystickButtonMappings()
     };
 }
 
+template<typename Key>
+static QList<InputAction> actionsFromMappings(const QMap<Key, QList<InputAction>> &mappings)
+{
+    QList<InputAction> actions;
+    for (const QList<InputAction> &mappedActions : mappings) {
+        actions.append(mappedActions);
+    }
+    return actions;
+}
+
 SdlController::SdlController()
     : QObject()
 {
@@ -471,7 +482,7 @@ void SdlController::addGamepadDevice(SDL_JoystickID instanceId)
     QString deviceName = gamepadName(gamepad);
     qInfo() << "Adding SDL gamepad:" << deviceName;
 
-    auto device = new SdlDevice(gamepad, instanceId, this);
+    auto device = new SdlGamepadDevice(gamepad, instanceId, this);
     m_devices.insert(instanceId, device);
 
     // Register the device path with the watcher
@@ -504,7 +515,7 @@ void SdlController::addJoystickDevice(SDL_JoystickID instanceId)
     QString deviceName = joystickName(joystick);
     qInfo() << "Adding SDL joystick:" << deviceName;
 
-    auto device = new SdlDevice(joystick, instanceId, this);
+    auto device = new SdlJoystickDevice(joystick, instanceId, this);
     m_devices.insert(instanceId, device);
 
     if (!device->devicePath().isEmpty()) {
@@ -545,50 +556,20 @@ void SdlController::removeDevice(SDL_JoystickID instanceId)
     }
 }
 
-SdlDevice::SdlDevice(SDL_Gamepad *gamepad, SDL_JoystickID instanceId, SdlController *controller)
-    : Device(DeviceGamepad, gamepadName(gamepad), gamepadUniqueIdentifier(gamepad, instanceId))
+SdlDevice::SdlDevice(QString name, QString uniqueIdentifier, QString devicePath, SdlControllerFamily family, SDL_JoystickID instanceId, SdlController *controller)
+    : Device(DeviceGamepad, std::move(name), std::move(uniqueIdentifier))
     , m_controller(controller)
-    , m_gamepad(gamepad)
     , m_instanceId(instanceId)
-    , m_devicePath(gamepadPath(gamepad))
-    , m_controllerFamily(gamepadFamily(gamepad))
-    , m_buttons(gamepadButtonMappings(m_controllerFamily))
-    , m_joystickButtons(joystickButtonMappings())
+    , m_devicePath(std::move(devicePath))
+    , m_controllerFamily(family)
 {
     setControllerFamily(controllerFamilyId(m_controllerFamily), controllerFamilyName(m_controllerFamily));
-    initializeUsedKeys();
-    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier << "family:" << controllerFamilyId(m_controllerFamily);
 }
 
-SdlDevice::SdlDevice(SDL_Joystick *joystick, SDL_JoystickID instanceId, SdlController *controller)
-    : Device(DeviceGamepad, joystickName(joystick), joystickUniqueIdentifier(joystick, instanceId))
-    , m_controller(controller)
-    , m_joystick(joystick)
-    , m_instanceId(instanceId)
-    , m_devicePath(joystickPath(joystick))
-    , m_controllerFamily(joystickFamily(joystick))
-    , m_buttons(gamepadButtonMappings(m_controllerFamily))
-    , m_joystickButtons(joystickButtonMappings())
-{
-    setControllerFamily(controllerFamilyId(m_controllerFamily), controllerFamilyName(m_controllerFamily));
-    initializeUsedKeys();
-    qDebug() << "Created SdlDevice:" << m_name << "identifier:" << m_uniqueIdentifier << "backend: joystick"
-             << "family:" << controllerFamilyId(m_controllerFamily);
-}
-
-void SdlDevice::initializeUsedKeys()
+void SdlDevice::initializeUsedKeys(const QList<InputAction> &buttonActions)
 {
     QSet<int> keys;
-    auto addActions = [&keys](const QList<InputAction> &actions) {
-        keys.unite(keysForInputActions(actions));
-    };
-
-    for (const QList<InputAction> &actions : m_buttons) {
-        addActions(actions);
-    }
-    for (const QList<InputAction> &actions : m_joystickButtons) {
-        addActions(actions);
-    }
+    keys.unite(keysForInputActions(buttonActions));
 
     // Add keys produced by axes, hats and triggers.
     keys.unite(keysForInputActions({
@@ -613,13 +594,64 @@ SdlDevice::~SdlDevice()
     if (m_mouseTimer) {
         m_mouseTimer->stop();
     }
+    qDebug() << "Destroyed SdlDevice:" << m_name;
+}
+
+void SdlDevice::processButtonEvent(const SDL_GamepadButtonEvent &event)
+{
+    Q_UNUSED(event)
+}
+
+void SdlDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
+{
+    Q_UNUSED(event)
+}
+
+void SdlDevice::processJoystickButtonEvent(const SDL_JoyButtonEvent &event)
+{
+    Q_UNUSED(event)
+}
+
+void SdlDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
+{
+    Q_UNUSED(event)
+}
+
+void SdlDevice::processJoystickHatEvent(const SDL_JoyHatEvent &event)
+{
+    Q_UNUSED(event)
+}
+
+SdlGamepadDevice::SdlGamepadDevice(SDL_Gamepad *gamepad, SDL_JoystickID instanceId, SdlController *controller)
+    : SdlDevice(gamepadName(gamepad), gamepadUniqueIdentifier(gamepad, instanceId), gamepadPath(gamepad), gamepadFamily(gamepad), instanceId, controller)
+    , m_gamepad(gamepad)
+    , m_buttons(gamepadButtonMappings(gamepadFamily(gamepad)))
+{
+    initializeUsedKeys(actionsFromMappings(m_buttons));
+    qDebug() << "Created SdlGamepadDevice:" << m_name << "identifier:" << m_uniqueIdentifier << "family:" << controllerFamilyId();
+}
+
+SdlGamepadDevice::~SdlGamepadDevice()
+{
     if (m_gamepad) {
         SDL_CloseGamepad(m_gamepad);
     }
+}
+
+SdlJoystickDevice::SdlJoystickDevice(SDL_Joystick *joystick, SDL_JoystickID instanceId, SdlController *controller)
+    : SdlDevice(joystickName(joystick), joystickUniqueIdentifier(joystick, instanceId), joystickPath(joystick), joystickFamily(joystick), instanceId, controller)
+    , m_joystick(joystick)
+    , m_buttons(joystickButtonMappings())
+{
+    initializeUsedKeys(actionsFromMappings(m_buttons));
+    qDebug() << "Created SdlJoystickDevice:" << m_name << "identifier:" << m_uniqueIdentifier << "family:" << controllerFamilyId();
+}
+
+SdlJoystickDevice::~SdlJoystickDevice()
+{
     if (m_joystick) {
         SDL_CloseJoystick(m_joystick);
     }
-    qDebug() << "Destroyed SdlDevice:" << m_name;
 }
 
 void SdlDevice::updateMouseMovement()
@@ -737,7 +769,7 @@ void SdlDevice::updateMouseTimer()
     }
 }
 
-void SdlDevice::processButtonEvent(const SDL_GamepadButtonEvent &event)
+void SdlGamepadDevice::processButtonEvent(const SDL_GamepadButtonEvent &event)
 {
     bool pressed = (event.down != 0);
     auto button = static_cast<SDL_GamepadButton>(event.button);
@@ -765,7 +797,7 @@ void SdlDevice::processButtonEvent(const SDL_GamepadButtonEvent &event)
     }
 }
 
-void SdlDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
+void SdlGamepadDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
 {
     int value = event.value;
     auto axis = static_cast<SDL_GamepadAxis>(event.axis);
@@ -812,18 +844,18 @@ void SdlDevice::processAxisEvent(const SDL_GamepadAxisEvent &event)
     }
 }
 
-void SdlDevice::processJoystickButtonEvent(const SDL_JoyButtonEvent &event)
+void SdlJoystickDevice::processJoystickButtonEvent(const SDL_JoyButtonEvent &event)
 {
     const bool pressed = (event.down != 0);
     qDebug() << "Joystick button event:" << event.button << "pressed:" << pressed;
 
-    const QList<InputAction> actions = m_joystickButtons.value(event.button);
+    const QList<InputAction> actions = m_buttons.value(event.button);
     for (InputAction action : actions) {
         setAction(action, pressed);
     }
 }
 
-void SdlDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
+void SdlJoystickDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
 {
     const int value = event.value;
 
@@ -856,7 +888,7 @@ void SdlDevice::processJoystickAxisEvent(const SDL_JoyAxisEvent &event)
     }
 }
 
-void SdlDevice::processJoystickHatEvent(const SDL_JoyHatEvent &event)
+void SdlJoystickDevice::processJoystickHatEvent(const SDL_JoyHatEvent &event)
 {
     const int newXDirection = (event.value & SDL_HAT_LEFT) ? -1 : ((event.value & SDL_HAT_RIGHT) ? 1 : 0);
     const int newYDirection = (event.value & SDL_HAT_UP) ? -1 : ((event.value & SDL_HAT_DOWN) ? 1 : 0);

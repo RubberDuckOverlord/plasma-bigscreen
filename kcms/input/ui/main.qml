@@ -200,7 +200,7 @@ Bigscreen.ScrollablePage {
             id: noControllersDelegate
             visible: kcm.serviceAvailable && root.connectedGameControllers.length === 0
             text: i18n("No controllers connected")
-            description: i18n("Connect a game controller")
+            description: i18n("Connect a game controller. Keyboards and Flirc remotes work as keyboard input and do not appear here.")
             icon.name: "input-gamepad-symbolic"
         }
 
