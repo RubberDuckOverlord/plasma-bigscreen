@@ -175,6 +175,22 @@ void InputHandlerDBus::prepareForDisplayOffWake()
     ControllerManager::instance().prepareForDisplayOffWake();
 }
 
+void InputHandlerDBus::requestBigscreenInputFocus()
+{
+    if (!m_sdlController) {
+        return;
+    }
+    m_sdlController->requestBigscreenInputFocus();
+}
+
+void InputHandlerDBus::releaseBigscreenInputFocus()
+{
+    if (!m_sdlController) {
+        return;
+    }
+    m_sdlController->releaseBigscreenInputFocus();
+}
+
 void InputHandlerDBus::setInputSuppressed(bool suppress)
 {
     if (!m_sdlController) {

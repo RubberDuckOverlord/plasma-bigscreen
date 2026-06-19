@@ -38,6 +38,8 @@ public:
 
     Q_INVOKABLE bool isSdlControllerConnected();
     Q_INVOKABLE bool isCecControllerConnected();
+    Q_INVOKABLE void requestBigscreenInputFocus();
+    Q_INVOKABLE void releaseBigscreenInputFocus();
 
 Q_SIGNALS:
     void sdlControllerConnectedChanged();

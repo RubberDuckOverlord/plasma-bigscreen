@@ -460,13 +460,40 @@ void SdlController::setAutoSuppressInput(bool enabled)
     Q_EMIT autoSuppressInputChanged(enabled);
 }
 
+void SdlController::requestBigscreenInputFocus()
+{
+    if (m_bigscreenInputFocus) {
+        return;
+    }
+
+    m_bigscreenInputFocus = true;
+    qInfo() << "Bigscreen input focus requested";
+    if (!m_manualSuppressInput) {
+        if (m_autoUnsuppressTimer) {
+            m_autoUnsuppressTimer->stop();
+        }
+        setAutomaticSuppression(false);
+    }
+}
+
+void SdlController::releaseBigscreenInputFocus()
+{
+    if (!m_bigscreenInputFocus) {
+        return;
+    }
+
+    m_bigscreenInputFocus = false;
+    qInfo() << "Bigscreen input focus released";
+    updateAutomaticSuppression();
+}
+
 void SdlController::updateAutomaticSuppression()
 {
     if (m_manualSuppressInput || !m_deviceWatcher) {
         return;
     }
 
-    const bool shouldSuppress = m_autoSuppressInput && m_deviceWatcher->hasOtherProcesses();
+    const bool shouldSuppress = m_autoSuppressInput && !m_bigscreenInputFocus && m_deviceWatcher->hasOtherProcesses();
     if (shouldSuppress) {
         if (m_autoUnsuppressTimer) {
             m_autoUnsuppressTimer->stop();

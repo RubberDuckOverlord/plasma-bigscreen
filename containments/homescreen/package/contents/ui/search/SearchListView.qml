@@ -12,6 +12,7 @@ import org.kde.plasma.components 3.0 as PlasmaComponents
 import org.kde.plasma.extras 2.0 as PlasmaExtras
 import org.kde.plasma.private.nanoshell as NanoShell
 import org.kde.bigscreen as Bigscreen
+import org.kde.bigscreen.controllerhandler as ControllerHandler
 
 import org.kde.milou as Milou
 import org.kde.kirigami as Kirigami
@@ -39,6 +40,7 @@ Milou.ResultsView {
     }
 
     onActivated: {
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
         root.hideOverlayRequested();
     }
     onUpdateQueryString: {
@@ -83,6 +85,7 @@ Milou.ResultsView {
         }
 
         onClicked: {
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
             listView.currentIndex = model.index;
             listView.runCurrentIndex();
 

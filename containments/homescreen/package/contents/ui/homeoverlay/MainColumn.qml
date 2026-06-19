@@ -34,13 +34,10 @@ ColumnLayout {
         if (visible) {
             homeButton.forceActiveFocus();
 
-            // Don't have controller input suppressed while the home overlay is open, so user can interact
-            // Save the state to a variable
             closeControllerSuppressState = ControllerHandler.ControllerHandlerStatus.inputSuppressed;
-            ControllerHandler.ControllerHandlerStatus.inputSuppressed = false;
-        } else {
-            // Restore controller input suppressed state (which may have been toggled here)
-            ControllerHandler.ControllerHandlerStatus.inputSuppressed = closeControllerSuppressState;
+            ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
+        } else if (closeControllerSuppressState) {
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
         }
     }
 
@@ -127,6 +124,8 @@ ColumnLayout {
                 text: i18n("Home")
                 icon.name: "go-home-symbolic"
                 onClicked: {
+                    closeControllerSuppressState = false;
+                    ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
                     root.minimizeAllTasksRequested();
                 }
             }
@@ -183,6 +182,11 @@ ColumnLayout {
                 checked: !root.closeControllerSuppressState
                 onCheckedChanged: {
                     root.closeControllerSuppressState = !checked;
+                    if (checked) {
+                        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
+                    } else {
+                        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+                    }
                     checked = Qt.binding(() => !root.closeControllerSuppressState)
                 }
             }

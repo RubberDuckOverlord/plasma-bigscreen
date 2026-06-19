@@ -182,6 +182,20 @@ bool ControllerHandlerStatus::isCecControllerConnected()
     return reply.isValid() ? reply.value() : false;
 }
 
+void ControllerHandlerStatus::requestBigscreenInputFocus()
+{
+    if (m_dbusInterface) {
+        m_dbusInterface->asyncCall(QStringLiteral("requestBigscreenInputFocus"));
+    }
+}
+
+void ControllerHandlerStatus::releaseBigscreenInputFocus()
+{
+    if (m_dbusInterface) {
+        m_dbusInterface->asyncCall(QStringLiteral("releaseBigscreenInputFocus"));
+    }
+}
+
 void ControllerHandlerStatus::onSdlControllerAdded(const QString &name)
 {
     m_sdlControllerConnected = true;
