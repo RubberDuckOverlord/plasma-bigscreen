@@ -55,6 +55,8 @@ private Q_SLOTS:
     void onCecKeyPressed(int keycode, int duration);
 
 private:
+    void unregisterDevice();
+
     struct CecInputBinding {
         InputAction action = InputAction::None;
         int nativeKey = -1;

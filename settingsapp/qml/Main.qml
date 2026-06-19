@@ -127,6 +127,8 @@ Window {
         }
     }
 
+    Component.onDestruction: ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("settings-app")
+
     Item {
         id: configContentItem
         anchors.fill: parent

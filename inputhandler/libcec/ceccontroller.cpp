@@ -147,11 +147,27 @@ CECController::CECController(QObject *parent)
 
 CECController::~CECController()
 {
+    unregisterDevice();
+
     if (m_workerThread) {
         QMetaObject::invokeMethod(m_worker, "cleanup", Qt::BlockingQueuedConnection);
         m_workerThread->quit();
         m_workerThread->wait(5000);
     }
+}
+
+void CECController::unregisterDevice()
+{
+    if (!m_device) {
+        return;
+    }
+
+    ControllerManager::instance().deviceRemoved(m_device);
+    delete m_device;
+    m_device = nullptr;
+    m_connectedDevices.clear();
+    m_adapterCount = 0;
+    Q_EMIT controllerRemoved(QStringLiteral("CEC Controller"));
 }
 
 void CECController::onWorkerInitialized(bool success)

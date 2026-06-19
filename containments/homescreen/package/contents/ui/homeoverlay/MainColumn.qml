@@ -52,6 +52,8 @@ ColumnLayout {
         }
     }
 
+    Component.onDestruction: ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay")
+
     spacing: 0
 
     Kirigami.Theme.inherit: false

@@ -46,6 +46,8 @@ Window {
         }
     }
 
+    Component.onDestruction: ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("favorites-overlay")
+
     onVisibleChanged: {
         // Fade in when window is opening
         if (visible) {

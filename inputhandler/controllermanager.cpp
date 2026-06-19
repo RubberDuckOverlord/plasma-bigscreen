@@ -8,6 +8,8 @@
 #include "inputhandlersettings.h"
 #include "xdgremotedesktopsystem.h"
 
+#include <QDebug>
+
 ControllerManager::ControllerManager(QObject *parent)
     : QObject(parent)
 {
@@ -70,6 +72,11 @@ void ControllerManager::deviceRemoved(Device *device)
 
 void ControllerManager::removeDevice(int deviceIndex)
 {
+    if (deviceIndex < 0 || deviceIndex >= m_connectedDevices.size()) {
+        qWarning() << "Ignoring disconnect for invalid device index:" << deviceIndex;
+        return;
+    }
+
     Device *removedDevice = m_connectedDevices.at(deviceIndex);
     m_connectedDevices.remove(deviceIndex);
 

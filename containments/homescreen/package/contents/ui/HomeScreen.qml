@@ -48,6 +48,7 @@ Item {
     }
 
     Component.onCompleted: updateBigscreenInputFocus()
+    Component.onDestruction: ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("homescreen")
 
     transform: Scale {
         origin.x: root.width / 2;

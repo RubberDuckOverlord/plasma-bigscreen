@@ -43,6 +43,8 @@ Window {
         }
     }
 
+    Component.onDestruction: ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("search-overlay")
+
     onVisibleChanged: {
         // Fade in when window is opening
         if (visible) {

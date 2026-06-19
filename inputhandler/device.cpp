@@ -18,9 +18,7 @@ Device::Device(DeviceType deviceType, QString name, QString uniqueIdentifier)
 
 void Device::setIndex(int index)
 {
-    if (m_index < 0) {
-        m_index = index;
-    }
+    m_index = index;
 }
 
 QString Device::getUniqueIdentifier()
