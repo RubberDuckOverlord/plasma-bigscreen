@@ -72,6 +72,13 @@ protected:
     double m_rightStickX = 0.0;
     double m_rightStickY = 0.0;
 
+    // Threshold for axis to be considered pressed (0-32767 range)
+    static constexpr int AXIS_THRESHOLD = 16384;
+    // Deadzone for mouse movement (smaller than keyboard threshold)
+    static constexpr int MOUSE_DEADZONE = 4000;
+    // Mouse sensitivity multiplier
+    static constexpr double MOUSE_SENSITIVITY = 15.0;
+
 private:
     void setKey(InputAction action, int key, bool pressed);
     bool inputAllowedWhileSuppressed(InputAction action);
@@ -83,13 +90,6 @@ private:
     QSet<int> m_pressedKeys;
 
     QTimer *m_mouseTimer = nullptr;
-
-    // Threshold for axis to be considered pressed (0-32767 range)
-    static constexpr int AXIS_THRESHOLD = 16384;
-    // Deadzone for mouse movement (smaller than keyboard threshold)
-    static constexpr int MOUSE_DEADZONE = 4000;
-    // Mouse sensitivity multiplier
-    static constexpr double MOUSE_SENSITIVITY = 15.0;
 };
 
 class SdlGamepadDevice : public SdlDevice

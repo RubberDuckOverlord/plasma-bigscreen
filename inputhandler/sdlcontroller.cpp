@@ -702,8 +702,14 @@ void SdlDevice::setAction(InputAction action, bool pressed)
     }
 
     const QList<int> keyCodes = keysForInputAction(action);
-    for (int key : keyCodes) {
-        setKey(action, key, pressed);
+    if (pressed) {
+        for (int key : keyCodes) {
+            setKey(action, key, pressed);
+        }
+    } else {
+        for (int i = keyCodes.size() - 1; i >= 0; --i) {
+            setKey(action, keyCodes.at(i), pressed);
+        }
     }
 }
 

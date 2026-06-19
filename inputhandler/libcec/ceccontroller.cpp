@@ -282,8 +282,8 @@ void CECController::onCecKeyPressed(int keycode, int duration)
         for (int key : keys) {
             ControllerManager::instance().emitKey(m_device, key, 1);
         }
-        for (int key : keys) {
-            ControllerManager::instance().emitKey(m_device, key, 0);
+        for (int i = keys.size() - 1; i >= 0; --i) {
+            ControllerManager::instance().emitKey(m_device, keys.at(i), 0);
         }
         return;
     }

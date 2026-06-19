@@ -86,7 +86,7 @@ Bigscreen.ScrollablePage {
         Bigscreen.ButtonDelegate {
             width: ListView.view.width
             text: modelData.name
-            description: modelData.controllerFamilyName ? i18n("%1 native profile", modelData.controllerFamilyName) : ""
+            description: modelData.controllerFamily && modelData.controllerFamily !== "generic" ? i18n("%1 native profile", modelData.controllerFamilyName) : ""
             icon.name: modelData.iconName
             enabled: kcm.serviceAvailable && kcm.enabled && modelData.enabled
 
