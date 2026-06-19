@@ -20,6 +20,7 @@ Bigscreen.ButtonDelegate {
     required property var model
     property bool connecting: false
     property bool disconnecting: false
+    property bool controllerSetup: false
 
     function displayName() {
         if (model.DeviceFullName) {
@@ -39,6 +40,25 @@ Bigscreen.ButtonDelegate {
             return i18n("Connecting…");
         } else if (disconnecting) {
             return i18n("Disconnecting…");
+        } else if (controllerSetup) {
+            const labels = [];
+
+            if (model.Connected) {
+                labels.push(i18n("Ready to use"));
+            } else if (model.Paired) {
+                labels.push(i18n("Paired. Press to connect"));
+            } else {
+                labels.push(i18n("New controller. Press to pair"));
+            }
+
+            if (model.Battery) {
+                labels.push(i18n("%1% Battery", model.Battery.percentage));
+            }
+            if (model.Name !== displayName() && model.Address) {
+                labels.push(model.Address);
+            }
+
+            return labels.join(" · ");
         } else {
             const labels = [];
 

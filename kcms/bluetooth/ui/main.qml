@@ -259,9 +259,21 @@ Bigscreen.ScrollablePage {
     Bigscreen.Dialog {
         id: controllerSetupDialog
         title: i18n("Add game controller")
-        openFocusItem: controllerScanButton
+        openFocusItem: knownControllersModel.count > 0 ? knownControllersView : controllerScanButton
 
-        onOpened: bluetoothView.startDiscovery()
+        function focusInitialItem() {
+            if (knownControllersView.visible && knownControllersView.currentItem) {
+                knownControllersView.currentItem.forceActiveFocus();
+                return;
+            }
+
+            controllerScanButton.forceActiveFocus();
+        }
+
+        onOpened: {
+            bluetoothView.startDiscovery();
+            Qt.callLater(focusInitialItem);
+        }
         onClosed: addControllerButton.forceActiveFocus()
 
         contentItem: ColumnLayout {
@@ -293,6 +305,7 @@ Bigscreen.ScrollablePage {
                 spacing: Kirigami.Units.smallSpacing
                 model: knownControllersModel
                 keyNavigationEnabled: true
+                currentIndex: count > 0 ? 0 : -1
 
                 KeyNavigation.down: controllerScanButton
 
@@ -301,6 +314,7 @@ Bigscreen.ScrollablePage {
                     width: knownControllersView.width
                     smallDescription: true
                     raisedBackground: false
+                    controllerSetup: true
 
                     onClicked: {
                         controllerSetupDialog.close();
@@ -340,6 +354,7 @@ Bigscreen.ScrollablePage {
                 spacing: Kirigami.Units.smallSpacing
                 model: controllerCandidatesModel
                 keyNavigationEnabled: true
+                currentIndex: count > 0 ? 0 : -1
 
                 KeyNavigation.up: controllerScanButton
                 KeyNavigation.down: closeControllerSetupButton
@@ -349,6 +364,7 @@ Bigscreen.ScrollablePage {
                     width: controllerCandidatesView.width
                     smallDescription: true
                     raisedBackground: false
+                    controllerSetup: true
 
                     onClicked: {
                         controllerSetupDialog.close();
