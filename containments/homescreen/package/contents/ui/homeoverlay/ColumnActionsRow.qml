@@ -31,7 +31,7 @@ RowLayout {
                 id: turnScreenOffButton
                 Layout.fillWidth: true
                 icon.name: "video-display"
-                text: i18n("Turn Screen Off")
+                text: i18n("Turn screen off")
                 description: i18n("Keep apps and downloads running while the TV or monitor enters standby.")
                 KeyNavigation.down: powerOptionsButton
 
@@ -46,7 +46,7 @@ RowLayout {
                 id: powerOptionsButton
                 Layout.fillWidth: true
                 icon.name: "system-shutdown"
-                text: i18n("Power Options")
+                text: i18n("Power options")
                 description: i18n("Shut down, restart, suspend, or log out.")
                 KeyNavigation.up: turnScreenOffButton
 
