@@ -34,9 +34,30 @@ Bigscreen.ScrollablePage {
 
     property BluezQt.Manager manager: BluezQt.Manager
     readonly property var usableAdapter: manager.usableAdapter
+    readonly property int adapterCount: BluezQt.Manager.adapters ? BluezQt.Manager.adapters.length : 0
     readonly property bool bluetoothReady: BluezQt.Manager.bluetoothOperational && usableAdapter
     readonly property bool discovering: bluetoothReady && usableAdapter.discovering
     property string discoveryError: ""
+
+    function bluetoothUnavailableTitle() {
+        if (adapterCount === 0) {
+            return i18n("No Bluetooth adapter found");
+        }
+        if (BluezQt.Manager.bluetoothBlocked) {
+            return i18n("Bluetooth is blocked");
+        }
+        return i18n("Bluetooth is off");
+    }
+
+    function bluetoothUnavailableDescription() {
+        if (adapterCount === 0) {
+            return i18n("Connect a Bluetooth adapter to pair controllers and remotes.");
+        }
+        if (BluezQt.Manager.bluetoothBlocked) {
+            return i18n("Turn Bluetooth on to pair or reconnect controllers.");
+        }
+        return i18n("Turn Bluetooth on to power the adapter and scan for controllers.");
+    }
 
     function startDiscovery() {
         if (!bluetoothReady) {
@@ -165,7 +186,18 @@ Bigscreen.ScrollablePage {
                 checked = Qt.binding(() => BluezQt.Manager.bluetoothOperational);
             }
 
-            KeyNavigation.down: addControllerButton
+            KeyNavigation.down: bluetoothUnavailableDelegate.visible ? bluetoothUnavailableDelegate : addControllerButton
+        }
+
+        Bigscreen.TextDelegate {
+            id: bluetoothUnavailableDelegate
+            visible: !bluetoothView.bluetoothReady
+            text: bluetoothView.bluetoothUnavailableTitle()
+            description: bluetoothView.bluetoothUnavailableDescription()
+            icon.name: "network-bluetooth-disabled-symbolic"
+
+            KeyNavigation.up: bluetoothToggle
+            KeyNavigation.down: addControllerButton.visible ? addControllerButton : null
         }
 
         Bigscreen.ButtonDelegate {
@@ -177,7 +209,7 @@ Bigscreen.ScrollablePage {
             icon.name: "input-gamepad-symbolic"
             enabled: bluetoothView.bluetoothReady
 
-            KeyNavigation.up: bluetoothToggle
+            KeyNavigation.up: bluetoothUnavailableDelegate.visible ? bluetoothUnavailableDelegate : bluetoothToggle
             KeyNavigation.down: readyControllersDelegate.visible ? readyControllersDelegate : scanButton
 
             onClicked: {
