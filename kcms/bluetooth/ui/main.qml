@@ -100,6 +100,13 @@ Bigscreen.ScrollablePage {
         sourceModel: BluezQt.DevicesModel {}
     }
 
+    DevicesProxyModel {
+        id: knownControllersModel
+        pairedOnly: true
+        inputDevicesOnly: true
+        sourceModel: BluezQt.DevicesModel {}
+    }
+
     ColumnLayout {
         KeyNavigation.left: bluetoothView.KeyNavigation.left
         id: column
@@ -263,17 +270,53 @@ Bigscreen.ScrollablePage {
             Bigscreen.TextDelegate {
                 Layout.fillWidth: true
                 text: i18n("Put your controller in pairing mode")
-                description: i18n("For Xbox, hold the pairing button until the Xbox light flashes. For PlayStation, hold Share and PS until the light bar flashes. For Steam controllers, use Bluetooth pairing mode.")
+                description: knownControllersModel.count > 0
+                    ? i18n("Reconnect a paired controller below, or put a new controller in pairing mode.")
+                    : i18n("For Xbox, hold the pairing button until the Xbox light flashes. For PlayStation, hold Share and PS until the light bar flashes. For Steam controllers, use Bluetooth pairing mode.")
                 icon.name: "input-gamepad-symbolic"
+            }
+
+            QQC2.Label {
+                text: i18n("Known controllers")
+                visible: knownControllersModel.count > 0
+                font.pixelSize: Bigscreen.Units.headingFontPixelSize
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                Layout.bottomMargin: Kirigami.Units.smallSpacing
+            }
+
+            ListView {
+                id: knownControllersView
+                Layout.fillWidth: true
+                implicitHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 10)
+                visible: knownControllersModel.count > 0
+                clip: true
+                spacing: Kirigami.Units.smallSpacing
+                model: knownControllersModel
+                keyNavigationEnabled: true
+
+                KeyNavigation.down: controllerScanButton
+
+                delegate: DeviceDelegate {
+                    id: knownControllerDelegate
+                    width: knownControllersView.width
+                    smallDescription: true
+                    raisedBackground: false
+
+                    onClicked: {
+                        controllerSetupDialog.close();
+                        bluetoothView.openDeviceSidebar(model.Device, addControllerButton);
+                    }
+                }
             }
 
             Bigscreen.ButtonDelegate {
                 id: controllerScanButton
                 Layout.fillWidth: true
-                text: bluetoothView.discovering ? i18n("Scanning…") : i18n("Scan again")
+                text: bluetoothView.discovering ? i18n("Scanning…") : i18n("Scan for new controllers")
                 description: bluetoothView.discoveryError || i18n("Only likely controllers and unresolved input devices are shown here")
                 icon.name: bluetoothView.discoveryError ? "dialog-warning-symbolic" : "view-refresh-symbolic"
 
+                KeyNavigation.up: knownControllersModel.count > 0 ? knownControllersView : null
                 KeyNavigation.down: controllerCandidatesModel.count > 0 ? controllerCandidatesView : closeControllerSetupButton
                 onClicked: bluetoothView.startDiscovery()
             }

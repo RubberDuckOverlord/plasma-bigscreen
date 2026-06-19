@@ -211,7 +211,7 @@ bool DevicesProxyModel::filterAcceptsRow(int source_row, const QModelIndex &sour
 
     const bool paired = sourceModel()->data(index, BluezQt::DevicesModel::PairedRole).toBool();
     if (m_pairedOnly) {
-        return paired;
+        return paired && (!m_inputDevicesOnly || isInputDevice(index));
     }
 
     if (paired) {
