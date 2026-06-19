@@ -12,6 +12,7 @@ target_link_libraries(bigscreenshell PRIVATE
     Qt::Gui
     Qt::Quick
     KF6::Service
+    KF6::ConfigCore
     KF6::Package
     KF6::KIOGui
     KF6::JobWidgets

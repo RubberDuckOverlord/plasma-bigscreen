@@ -118,12 +118,23 @@ Bigscreen.ScrollablePage {
         Bigscreen.SwitchDelegate {
             id: pmInhibitionDelegate
             Layout.bottomMargin: Kirigami.Units.smallSpacing
-            KeyNavigation.down: timeDateDelegate
+            KeyNavigation.down: powerButtonDelegate
 
             text: i18n("Power inhibition")
             description: i18n("Prevent the system from automatically sleeping")
             checked: BigscreenShell.Settings.pmInhibitionActive ? true : false
             onCheckedChanged: BigscreenShell.Settings.pmInhibitionActive = checked
+        }
+
+        Bigscreen.SwitchDelegate {
+            id: powerButtonDelegate
+            Layout.bottomMargin: Kirigami.Units.smallSpacing
+            KeyNavigation.down: timeDateDelegate
+
+            text: i18n("Power button turns screen off")
+            description: i18n("Use a short press of the system power button for TV-style display standby. Long press remains available for real power off.")
+            checked: BigscreenShell.Settings.powerButtonTurnsOffScreen ? true : false
+            onCheckedChanged: BigscreenShell.Settings.powerButtonTurnsOffScreen = checked
         }
 
         Bigscreen.ButtonDelegate {

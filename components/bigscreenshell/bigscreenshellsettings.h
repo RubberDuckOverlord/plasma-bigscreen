@@ -20,6 +20,7 @@ class BigscreenShellSettings : public QObject
     Q_PROPERTY(bool pmInhibitionEnabled READ pmInhibitionEnabled WRITE setPmInhibitionEnabled NOTIFY pmInhibitionEnabledChanged)
     Q_PROPERTY(bool navigationSoundEnabled READ navigationSoundEnabled WRITE setNavigationSoundEnabled NOTIFY navigationSoundEnabledChanged)
     Q_PROPERTY(bool windowDecorationsEnabled READ windowDecorationsEnabled WRITE setWindowDecorationsEnabled NOTIFY windowDecorationsEnabledChanged)
+    Q_PROPERTY(bool powerButtonTurnsOffScreen READ powerButtonTurnsOffScreen WRITE setPowerButtonTurnsOffScreen NOTIFY powerButtonTurnsOffScreenChanged)
 
 public:
     BigscreenShellSettings(QObject *parent = nullptr);
@@ -33,12 +34,18 @@ public:
     bool windowDecorationsEnabled() const;
     void setWindowDecorationsEnabled(bool windowDecorationsEnabled);
 
+    bool powerButtonTurnsOffScreen() const;
+    void setPowerButtonTurnsOffScreen(bool powerButtonTurnsOffScreen);
+
 Q_SIGNALS:
     void pmInhibitionEnabledChanged();
     void navigationSoundEnabledChanged();
     void windowDecorationsEnabledChanged();
+    void powerButtonTurnsOffScreenChanged();
 
 private:
+    void applyPowerDevilPowerButtonSetting(bool enabled, KConfigGroup &settingsGroup);
+
     KConfigWatcher::Ptr m_configWatcher;
     KSharedConfig::Ptr m_config;
 };
