@@ -34,12 +34,12 @@ ColumnLayout {
     function beginBigscreenInputFocus() {
         retainBigscreenInputFocus = false;
         closeControllerSuppressState = ControllerHandler.ControllerHandlerStatus.inputSuppressed;
-        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("home-overlay");
     }
 
     function endBigscreenInputFocus() {
         if (!retainBigscreenInputFocus) {
-            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay");
         }
     }
 
@@ -137,7 +137,7 @@ ColumnLayout {
                 onClicked: {
                     closeControllerSuppressState = false;
                     retainBigscreenInputFocus = true;
-                    ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
+                    ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("home-overlay");
                     root.minimizeAllTasksRequested();
                 }
             }
@@ -196,9 +196,9 @@ ColumnLayout {
                     root.closeControllerSuppressState = !checked;
                     root.retainBigscreenInputFocus = checked;
                     if (checked) {
-                        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
+                        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("home-overlay");
                     } else {
-                        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+                        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay");
                     }
                     checked = Qt.binding(() => !root.closeControllerSuppressState)
                 }

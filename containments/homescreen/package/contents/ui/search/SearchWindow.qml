@@ -28,12 +28,12 @@ Window {
 
     function showOverlay() {
         queryField.clear();
-        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("search-overlay");
         root.showFullScreen();
     }
 
     function hideOverlay() {
-        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("search-overlay");
         root.close();
     }
 

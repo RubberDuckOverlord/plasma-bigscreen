@@ -14,6 +14,7 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.kquickcontrolsaddons
 import org.kde.kirigami as Kirigami
 import org.kde.bigscreen as Bigscreen
+import org.kde.bigscreen.controllerhandler as ControllerHandler
 
 import "launcher"
 
@@ -28,6 +29,25 @@ Item {
     readonly property bool darkenBackground: launcher.scrolledDown
 
     property real zoomScale: 1
+
+    function updateBigscreenInputFocus() {
+        if (root.Window.activeFocusItem !== null) {
+            ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("homescreen");
+        } else {
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("homescreen");
+        }
+    }
+
+    Connections {
+        target: root.Window
+        ignoreUnknownSignals: true
+
+        function onActiveFocusItemChanged() {
+            root.updateBigscreenInputFocus();
+        }
+    }
+
+    Component.onCompleted: updateBigscreenInputFocus()
 
     transform: Scale {
         origin.x: root.width / 2;

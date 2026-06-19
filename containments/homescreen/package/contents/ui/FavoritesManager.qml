@@ -31,12 +31,12 @@ Window {
     function showOverlay() {
         favsContainerAddSection.positionViewAtBeginning();
         favsContainerRemoveSection.positionViewAtBeginning();
-        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus();
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("favorites-overlay");
         root.showFullScreen();
     }
 
     function hideOverlay() {
-        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("favorites-overlay");
         root.close();
     }
 

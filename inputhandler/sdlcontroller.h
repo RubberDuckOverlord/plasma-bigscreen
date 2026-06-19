@@ -156,8 +156,8 @@ public:
     {
         return m_manualSuppressInput;
     }
-    void requestBigscreenInputFocus();
-    void releaseBigscreenInputFocus();
+    void requestBigscreenInputFocus(const QString &source);
+    void releaseBigscreenInputFocus(const QString &source);
 
 Q_SIGNALS:
     void controllerAdded(const QString &name);
@@ -182,7 +182,7 @@ private:
     bool m_suppressInput = false;
     bool m_autoSuppressInput = true;
     bool m_manualSuppressInput = false; // Manually set via D-Bus
-    bool m_bigscreenInputFocus = false;
+    QSet<QString> m_bigscreenInputFocusSources;
     DeviceWatcher *m_deviceWatcher = nullptr;
 
     // Polling intervals

@@ -40,7 +40,8 @@ Milou.ResultsView {
     }
 
     onActivated: {
-        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("homescreen");
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("search-overlay");
         root.hideOverlayRequested();
     }
     onUpdateQueryString: {
@@ -85,7 +86,8 @@ Milou.ResultsView {
         }
 
         onClicked: {
-            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("homescreen");
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("search-overlay");
             listView.currentIndex = model.index;
             listView.runCurrentIndex();
 

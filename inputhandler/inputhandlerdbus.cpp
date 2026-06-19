@@ -175,20 +175,20 @@ void InputHandlerDBus::prepareForDisplayOffWake()
     ControllerManager::instance().prepareForDisplayOffWake();
 }
 
-void InputHandlerDBus::requestBigscreenInputFocus()
+void InputHandlerDBus::requestBigscreenInputFocus(const QString &source)
 {
     if (!m_sdlController) {
         return;
     }
-    m_sdlController->requestBigscreenInputFocus();
+    m_sdlController->requestBigscreenInputFocus(source);
 }
 
-void InputHandlerDBus::releaseBigscreenInputFocus()
+void InputHandlerDBus::releaseBigscreenInputFocus(const QString &source)
 {
     if (!m_sdlController) {
         return;
     }
-    m_sdlController->releaseBigscreenInputFocus();
+    m_sdlController->releaseBigscreenInputFocus(source);
 }
 
 void InputHandlerDBus::setInputSuppressed(bool suppress)

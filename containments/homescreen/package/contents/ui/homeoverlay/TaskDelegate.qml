@@ -41,7 +41,8 @@ Bigscreen.ItemDelegate {
     opacity: 1 - closeFactor
 
     onClicked: {
-        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("homescreen");
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay");
         tasksModel.minimizeAllTasks();
         tasksModel.requestActivate(tasksModel.makeModelIndex(index));
         root.closeHomeRequested();

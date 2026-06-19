@@ -182,17 +182,17 @@ bool ControllerHandlerStatus::isCecControllerConnected()
     return reply.isValid() ? reply.value() : false;
 }
 
-void ControllerHandlerStatus::requestBigscreenInputFocus()
+void ControllerHandlerStatus::requestBigscreenInputFocus(const QString &source)
 {
-    if (m_dbusInterface) {
-        m_dbusInterface->asyncCall(QStringLiteral("requestBigscreenInputFocus"));
+    if (m_dbusInterface && !source.isEmpty()) {
+        m_dbusInterface->asyncCall(QStringLiteral("requestBigscreenInputFocus"), source);
     }
 }
 
-void ControllerHandlerStatus::releaseBigscreenInputFocus()
+void ControllerHandlerStatus::releaseBigscreenInputFocus(const QString &source)
 {
-    if (m_dbusInterface) {
-        m_dbusInterface->asyncCall(QStringLiteral("releaseBigscreenInputFocus"));
+    if (m_dbusInterface && !source.isEmpty()) {
+        m_dbusInterface->asyncCall(QStringLiteral("releaseBigscreenInputFocus"), source);
     }
 }
 

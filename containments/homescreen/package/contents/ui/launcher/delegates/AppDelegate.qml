@@ -25,7 +25,8 @@ IconDelegate {
 
     onClicked: {
         Bigscreen.NavigationSoundEffects.playClickedSound();
-        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus();
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("homescreen");
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay");
         if (Plasmoid.applicationListModel.isApplicationRunning(delegate.applicationStorageId)) {
             Plasmoid.applicationListModel.maximizeApplication(delegate.applicationStorageId);
         } else {

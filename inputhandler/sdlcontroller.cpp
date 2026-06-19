@@ -460,14 +460,14 @@ void SdlController::setAutoSuppressInput(bool enabled)
     Q_EMIT autoSuppressInputChanged(enabled);
 }
 
-void SdlController::requestBigscreenInputFocus()
+void SdlController::requestBigscreenInputFocus(const QString &source)
 {
-    if (m_bigscreenInputFocus) {
+    if (source.isEmpty() || m_bigscreenInputFocusSources.contains(source)) {
         return;
     }
 
-    m_bigscreenInputFocus = true;
-    qInfo() << "Bigscreen input focus requested";
+    m_bigscreenInputFocusSources.insert(source);
+    qInfo() << "Bigscreen input focus requested by" << source;
     if (!m_manualSuppressInput) {
         if (m_autoUnsuppressTimer) {
             m_autoUnsuppressTimer->stop();
@@ -476,14 +476,13 @@ void SdlController::requestBigscreenInputFocus()
     }
 }
 
-void SdlController::releaseBigscreenInputFocus()
+void SdlController::releaseBigscreenInputFocus(const QString &source)
 {
-    if (!m_bigscreenInputFocus) {
+    if (source.isEmpty() || !m_bigscreenInputFocusSources.remove(source)) {
         return;
     }
 
-    m_bigscreenInputFocus = false;
-    qInfo() << "Bigscreen input focus released";
+    qInfo() << "Bigscreen input focus released by" << source;
     updateAutomaticSuppression();
 }
 
@@ -493,7 +492,7 @@ void SdlController::updateAutomaticSuppression()
         return;
     }
 
-    const bool shouldSuppress = m_autoSuppressInput && !m_bigscreenInputFocus && m_deviceWatcher->hasOtherProcesses();
+    const bool shouldSuppress = m_autoSuppressInput && m_bigscreenInputFocusSources.isEmpty() && m_deviceWatcher->hasOtherProcesses();
     if (shouldSuppress) {
         if (m_autoUnsuppressTimer) {
             m_autoUnsuppressTimer->stop();
