@@ -38,6 +38,7 @@ Window {
 
     function showOverlay() {
         showMaximized();
+        mainColumn.beginBigscreenInputFocus();
     }
 
     function hideOverlay() {
@@ -47,8 +48,10 @@ Window {
 
     onVisibleChanged: {
         if (visible) {
+            mainColumn.beginBigscreenInputFocus();
             sidebar.open()
         } else {
+            mainColumn.endBigscreenInputFocus();
             tasksView.visible = false;
             if (_pendingScreenshot) {
                 _pendingScreenshot = false;

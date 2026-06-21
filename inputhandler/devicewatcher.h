@@ -8,10 +8,11 @@
 #include <QSet>
 #include <QSocketNotifier>
 #include <QString>
+#include <QTimer>
 
 /**
- * Uses inotify to watch input devices for open/close events.
- * When another process opens a monitored device, scans /proc to identify it.
+ * Watches input device nodes with inotify, then checks /proc to see whether
+ * another user-facing process has the device open.
  */
 class DeviceWatcher : public QObject
 {
@@ -35,14 +36,19 @@ Q_SIGNALS:
 private:
     void onInotifyEvent();
     void checkDeviceAccess();
+    void updateRecheckTimer();
     bool isDeviceOpenByOthers() const;
 
     int m_inotifyFd = -1;
     QSocketNotifier *m_notifier = nullptr;
-    QHash<int, QString> m_watchDescriptors; // wd -> device path
+    QTimer *m_recheckTimer = nullptr;
+    QHash<int, QString> m_watchDescriptors;
+    QHash<QString, int> m_devicePathRefs;
     QSet<QString> m_devicePaths;
     bool m_othersUsingDevice = false;
     qint64 m_myPid;
 
+    static constexpr int IDLE_RECHECK_INTERVAL = 10000;
+    static constexpr int ACTIVE_RECHECK_INTERVAL = 2000;
     static const QSet<QString> s_ignoredProcesses;
 };

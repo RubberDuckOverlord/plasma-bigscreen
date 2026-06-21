@@ -73,6 +73,69 @@ function deviceTypeToString(device) {
     }
 }
 
+function isInputDevice(device) {
+    if (!device) {
+        return false;
+    }
+
+    if (isLikelyControllerName(device.name)) {
+        return true;
+    }
+
+    switch (device.type) {
+        case BluezQt.Device.Keyboard:
+        case BluezQt.Device.Mouse:
+        case BluezQt.Device.Joypad:
+        case BluezQt.Device.Tablet:
+        case BluezQt.Device.Peripheral:
+            return true;
+        default:
+            return device.uuids && device.uuids.includes(BluezQt.Services.HumanInterfaceDevice);
+    }
+}
+
+function isLikelyControllerName(name) {
+    if (!name) {
+        return false;
+    }
+
+    const normalizedName = name.toLowerCase();
+    return normalizedName.includes("controller")
+        || normalizedName.includes("gamepad")
+        || normalizedName.includes("xbox")
+        || normalizedName.includes("dualsense")
+        || normalizedName.includes("dualshock")
+        || normalizedName.includes("playstation")
+        || normalizedName.includes("wireless controller")
+        || normalizedName.includes("steam")
+        || normalizedName.includes("joy-con")
+        || normalizedName.includes("8bitdo")
+        || normalizedName.includes("stadia")
+        || normalizedName.includes("luna");
+}
+
+function controllerPairingHint(device) {
+    if (!device || !isInputDevice(device)) {
+        return "";
+    }
+
+    const name = device.name ? device.name.toLowerCase() : "";
+    if (name.includes("xbox")) {
+        return i18n("Hold the Xbox pairing button until the light flashes, then keep the controller awake until pairing completes.");
+    }
+    if (name.includes("dualsense") || name.includes("dualshock") || name.includes("playstation") || name.includes("wireless controller")) {
+        return i18n("Hold Share and PS until the light bar flashes, then keep the controller awake until pairing completes.");
+    }
+    if (name.includes("steam")) {
+        return i18n("Put the controller in Bluetooth pairing mode and keep it awake until pairing completes.");
+    }
+
+    return i18n("Keep the controller in pairing mode and press a button if it goes to sleep during setup.");
+}
+
 function makeCall(call, cb) {
+    if (!call || !call.finished) {
+        return;
+    }
     call.finished.connect(cb);
 }

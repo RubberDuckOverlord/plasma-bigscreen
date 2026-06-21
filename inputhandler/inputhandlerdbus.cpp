@@ -14,6 +14,7 @@
 #endif
 
 #include <QDBusConnection>
+#include <QDBusContext>
 #include <QDBusError>
 #include <QDebug>
 
@@ -32,7 +33,16 @@ InputHandlerDBus::InputHandlerDBus(QObject *parent)
         qWarning() << "Failed to register DBus object /InputHandler:" << sessionBus.lastError().message();
     }
 
+    m_bigscreenInputFocusWatcher = new QDBusServiceWatcher(this);
+    m_bigscreenInputFocusWatcher->setConnection(sessionBus);
+    m_bigscreenInputFocusWatcher->setWatchMode(QDBusServiceWatcher::WatchForUnregistration);
+    connect(m_bigscreenInputFocusWatcher,
+            &QDBusServiceWatcher::serviceUnregistered,
+            this,
+            &InputHandlerDBus::releaseBigscreenInputFocusForCaller);
+
     connect(&ControllerManager::instance(), &ControllerManager::homeActionRequested, this, &InputHandlerDBus::homeActionRequested);
+    connect(&ControllerManager::instance(), &ControllerManager::displayOffActionRequested, this, &InputHandlerDBus::displayOffActionRequested);
     connect(&ControllerManager::instance(), &ControllerManager::enabledChanged, this, &InputHandlerDBus::enabledChanged);
     connect(&ControllerManager::instance(), &ControllerManager::gameControllerEnabledChanged, this, &InputHandlerDBus::gameControllerEnabledChanged);
     connect(&ControllerManager::instance(), &ControllerManager::cecEnabledChanged, this, &InputHandlerDBus::cecEnabledChanged);
@@ -167,6 +177,96 @@ void InputHandlerDBus::setControllerEnabled(const QString &uniqueIdentifier, boo
 void InputHandlerDBus::setStartButtonEnabledWhenSuppressed(const QString &uniqueIdentifier, bool enabled)
 {
     ControllerManager::instance().setStartButtonEnabledWhenSuppressed(uniqueIdentifier, enabled);
+}
+
+void InputHandlerDBus::prepareForDisplayOffWake()
+{
+    ControllerManager::instance().prepareForDisplayOffWake();
+}
+
+void InputHandlerDBus::requestBigscreenInputFocus(const QString &source)
+{
+    if (!m_sdlController || source.isEmpty()) {
+        return;
+    }
+
+    const QString caller = callerService();
+    QSet<QString> &sources = m_bigscreenInputFocusSourcesByCaller[caller];
+    if (sources.contains(source)) {
+        return;
+    }
+
+    // Focus is source-scoped and caller-owned. A homescreen token should not
+    // clear a settings token, and a crashed caller must not leave input pinned.
+    if (sources.isEmpty() && m_bigscreenInputFocusWatcher && caller.startsWith(QLatin1Char(':'))) {
+        m_bigscreenInputFocusWatcher->addWatchedService(caller);
+    }
+    sources.insert(source);
+
+    m_sdlController->requestBigscreenInputFocus(source);
+}
+
+void InputHandlerDBus::releaseBigscreenInputFocus(const QString &source)
+{
+    if (!m_sdlController || source.isEmpty()) {
+        return;
+    }
+
+    const QString caller = callerService();
+    auto it = m_bigscreenInputFocusSourcesByCaller.find(caller);
+    if (it == m_bigscreenInputFocusSourcesByCaller.end() || !it.value().remove(source)) {
+        return;
+    }
+
+    if (it.value().isEmpty()) {
+        m_bigscreenInputFocusSourcesByCaller.erase(it);
+        if (m_bigscreenInputFocusWatcher && caller.startsWith(QLatin1Char(':'))) {
+            m_bigscreenInputFocusWatcher->removeWatchedService(caller);
+        }
+    }
+
+    if (sourceOwnedByOtherCallers(source, caller)) {
+        return;
+    }
+
+    m_sdlController->releaseBigscreenInputFocus(source);
+}
+
+QString InputHandlerDBus::callerService() const
+{
+    if (calledFromDBus()) {
+        return message().service();
+    }
+    return QStringLiteral("local");
+}
+
+bool InputHandlerDBus::sourceOwnedByOtherCallers(const QString &source, const QString &caller) const
+{
+    for (auto it = m_bigscreenInputFocusSourcesByCaller.constBegin(); it != m_bigscreenInputFocusSourcesByCaller.constEnd(); ++it) {
+        if (it.key() != caller && it.value().contains(source)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void InputHandlerDBus::releaseBigscreenInputFocusForCaller(const QString &caller)
+{
+    if (m_bigscreenInputFocusWatcher && caller.startsWith(QLatin1Char(':'))) {
+        m_bigscreenInputFocusWatcher->removeWatchedService(caller);
+    }
+
+    if (!m_sdlController) {
+        m_bigscreenInputFocusSourcesByCaller.remove(caller);
+        return;
+    }
+
+    const QSet<QString> sources = m_bigscreenInputFocusSourcesByCaller.take(caller);
+    for (const QString &source : sources) {
+        if (!sourceOwnedByOtherCallers(source, caller)) {
+            m_sdlController->releaseBigscreenInputFocus(source);
+        }
+    }
 }
 
 void InputHandlerDBus::setInputSuppressed(bool suppress)

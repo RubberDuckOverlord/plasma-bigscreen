@@ -39,12 +39,15 @@ DeviceWatcher::DeviceWatcher(QObject *parent)
 
     m_notifier = new QSocketNotifier(m_inotifyFd, QSocketNotifier::Read, this);
     connect(m_notifier, &QSocketNotifier::activated, this, &DeviceWatcher::onInotifyEvent);
+
+    m_recheckTimer = new QTimer(this);
+    m_recheckTimer->setInterval(IDLE_RECHECK_INTERVAL);
+    connect(m_recheckTimer, &QTimer::timeout, this, &DeviceWatcher::checkDeviceAccess);
 }
 
 DeviceWatcher::~DeviceWatcher()
 {
     if (m_inotifyFd >= 0) {
-        // Remove all watches
         for (int wd : m_watchDescriptors.keys()) {
             inotify_rm_watch(m_inotifyFd, wd);
         }
@@ -54,11 +57,17 @@ DeviceWatcher::~DeviceWatcher()
 
 void DeviceWatcher::addDevicePath(const QString &devicePath)
 {
-    if (devicePath.isEmpty() || m_devicePaths.contains(devicePath) || m_inotifyFd < 0) {
+    if (devicePath.isEmpty() || m_inotifyFd < 0) {
         return;
     }
 
-    // Watch for open and close events on the device
+    auto refIt = m_devicePathRefs.find(devicePath);
+    if (refIt != m_devicePathRefs.end()) {
+        ++refIt.value();
+        return;
+    }
+
+    // inotify tells us when to re-check ownership; /proc gives the actual owner.
     int wd = inotify_add_watch(m_inotifyFd, qPrintable(devicePath), IN_OPEN | IN_CLOSE_NOWRITE | IN_CLOSE_WRITE);
     if (wd < 0) {
         qWarning() << "DeviceWatcher: Failed to watch" << devicePath;
@@ -66,19 +75,29 @@ void DeviceWatcher::addDevicePath(const QString &devicePath)
     }
 
     m_devicePaths.insert(devicePath);
+    m_devicePathRefs.insert(devicePath, 1);
     m_watchDescriptors.insert(wd, devicePath);
 
-    // Initial check
     checkDeviceAccess();
 }
 
 void DeviceWatcher::removeDevicePath(const QString &devicePath)
 {
+    auto refIt = m_devicePathRefs.find(devicePath);
+    if (refIt == m_devicePathRefs.end()) {
+        return;
+    }
+
+    if (refIt.value() > 1) {
+        --refIt.value();
+        return;
+    }
+
+    m_devicePathRefs.erase(refIt);
     if (!m_devicePaths.remove(devicePath)) {
         return;
     }
 
-    // Find and remove the watch descriptor
     for (auto it = m_watchDescriptors.begin(); it != m_watchDescriptors.end(); ++it) {
         if (it.value() == devicePath) {
             inotify_rm_watch(m_inotifyFd, it.key());
@@ -91,17 +110,16 @@ void DeviceWatcher::removeDevicePath(const QString &devicePath)
         m_othersUsingDevice = false;
         Q_EMIT otherProcessesChanged(false);
     }
+
+    updateRecheckTimer();
 }
 
 void DeviceWatcher::onInotifyEvent()
 {
-    // Read and discard all pending events - we just care that something happened
     char buffer[4096];
     while (read(m_inotifyFd, buffer, sizeof(buffer)) > 0) {
-        // Events consumed
     }
 
-    // Check if device access state changed
     checkDeviceAccess();
 }
 
@@ -113,10 +131,35 @@ void DeviceWatcher::checkDeviceAccess()
         m_othersUsingDevice = othersFound;
         Q_EMIT otherProcessesChanged(othersFound);
     }
+
+    updateRecheckTimer();
+}
+
+void DeviceWatcher::updateRecheckTimer()
+{
+    if (!m_recheckTimer) {
+        return;
+    }
+
+    if (m_devicePaths.isEmpty()) {
+        m_recheckTimer->stop();
+        return;
+    }
+
+    const int interval = m_othersUsingDevice ? ACTIVE_RECHECK_INTERVAL : IDLE_RECHECK_INTERVAL;
+    if (m_recheckTimer->interval() != interval) {
+        m_recheckTimer->setInterval(interval);
+    }
+
+    if (!m_recheckTimer->isActive()) {
+        m_recheckTimer->start();
+    }
 }
 
 bool DeviceWatcher::isDeviceOpenByOthers() const
 {
+    // This scan only runs after inotify activity or on a slow recheck timer, so
+    // it avoids a constant /proc walk while still catching apps that keep fds open.
     QDir procDir(QStringLiteral("/proc"));
     const auto entries = procDir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
 
@@ -138,7 +181,6 @@ bool DeviceWatcher::isDeviceOpenByOthers() const
             QString target = QFile::symLinkTarget(fdDirPath + QLatin1Char('/') + fd);
 
             if (m_devicePaths.contains(target)) {
-                // Check process name only when we find a match
                 QFile commFile(QStringLiteral("/proc/%1/comm").arg(pid));
                 if (commFile.open(QIODevice::ReadOnly)) {
                     QString name = QString::fromUtf8(commFile.readLine()).trimmed();

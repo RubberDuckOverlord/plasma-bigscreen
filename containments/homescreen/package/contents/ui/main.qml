@@ -14,6 +14,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.core as PlasmaCore
 import org.kde.kquickcontrolsaddons
 import org.kde.private.biglauncher
+import org.kde.bigscreen as Bigscreen
 import org.kde.bigscreen.controllerhandler as ControllerHandler
 import org.kde.bigscreen.shell as BigscreenShell
 
@@ -95,6 +96,10 @@ ContainmentItem {
 
         function onHomeActionRequested() {
             root.activateHome();
+        }
+
+        function onDisplayOffActionRequested() {
+            Bigscreen.Global.turnOffScreen();
         }
 
         function onSdlControllerAdded(name) {

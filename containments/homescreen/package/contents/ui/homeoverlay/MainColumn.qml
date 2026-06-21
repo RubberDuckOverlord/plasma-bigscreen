@@ -17,6 +17,7 @@ ColumnLayout {
 
     property bool showTasksButton
     property bool closeControllerSuppressState
+    property bool retainBigscreenInputFocus
 
     signal minimizeAllTasksRequested()
     signal searchRequested()
@@ -30,19 +31,28 @@ ColumnLayout {
         tasksButton.forceActiveFocus();
     }
 
+    function beginBigscreenInputFocus() {
+        retainBigscreenInputFocus = false;
+        closeControllerSuppressState = ControllerHandler.ControllerHandlerStatus.inputSuppressed;
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("home-overlay");
+    }
+
+    function endBigscreenInputFocus() {
+        if (!retainBigscreenInputFocus) {
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay");
+        }
+    }
+
     onVisibleChanged: {
         if (visible) {
             homeButton.forceActiveFocus();
-
-            // Don't have controller input suppressed while the home overlay is open, so user can interact
-            // Save the state to a variable
-            closeControllerSuppressState = ControllerHandler.ControllerHandlerStatus.inputSuppressed;
-            ControllerHandler.ControllerHandlerStatus.inputSuppressed = false;
+            beginBigscreenInputFocus();
         } else {
-            // Restore controller input suppressed state (which may have been toggled here)
-            ControllerHandler.ControllerHandlerStatus.inputSuppressed = closeControllerSuppressState;
+            endBigscreenInputFocus();
         }
     }
+
+    Component.onDestruction: ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay")
 
     spacing: 0
 
@@ -127,6 +137,9 @@ ColumnLayout {
                 text: i18n("Home")
                 icon.name: "go-home-symbolic"
                 onClicked: {
+                    closeControllerSuppressState = false;
+                    retainBigscreenInputFocus = true;
+                    ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("home-overlay");
                     root.minimizeAllTasksRequested();
                 }
             }
@@ -183,6 +196,12 @@ ColumnLayout {
                 checked: !root.closeControllerSuppressState
                 onCheckedChanged: {
                     root.closeControllerSuppressState = !checked;
+                    root.retainBigscreenInputFocus = checked;
+                    if (checked) {
+                        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("home-overlay");
+                    } else {
+                        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay");
+                    }
                     checked = Qt.binding(() => !root.closeControllerSuppressState)
                 }
             }

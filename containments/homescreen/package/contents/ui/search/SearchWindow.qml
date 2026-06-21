@@ -11,6 +11,7 @@ import org.kde.plasma.plasmoid
 import org.kde.plasma.private.nanoshell as NanoShell
 
 import org.kde.milou as Milou
+import org.kde.bigscreen.controllerhandler as ControllerHandler
 import org.kde.kirigami as Kirigami
 import org.kde.layershell as LayerShell
 
@@ -27,10 +28,12 @@ Window {
 
     function showOverlay() {
         queryField.clear();
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("search-overlay");
         root.showFullScreen();
     }
 
     function hideOverlay() {
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("search-overlay");
         root.close();
     }
 
@@ -39,6 +42,8 @@ Window {
             hideOverlay();
         }
     }
+
+    Component.onDestruction: ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("search-overlay")
 
     onVisibleChanged: {
         // Fade in when window is opening

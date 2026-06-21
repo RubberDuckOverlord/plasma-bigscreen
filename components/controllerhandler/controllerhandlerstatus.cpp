@@ -7,6 +7,8 @@
 #include <QDBusConnectionInterface>
 #include <QDBusReply>
 
+#include <utility>
+
 static const QString SERVICE = QStringLiteral("org.kde.plasma.bigscreen.inputhandler");
 static const QString PATH = QStringLiteral("/InputHandler");
 static const QString IFACE = QStringLiteral("org.kde.plasma.bigscreen.inputhandler");
@@ -55,11 +57,13 @@ void ControllerHandlerStatus::connectToService()
     bus.connect(SERVICE, PATH, IFACE, QStringLiteral("enabledChanged"), this, SLOT(onEnabledChanged(bool)));
     bus.connect(SERVICE, PATH, IFACE, QStringLiteral("gameControllerEnabledChanged"), this, SLOT(onGameControllerEnabledChanged(bool)));
     bus.connect(SERVICE, PATH, IFACE, QStringLiteral("homeActionRequested"), this, SIGNAL(homeActionRequested()));
+    bus.connect(SERVICE, PATH, IFACE, QStringLiteral("displayOffActionRequested"), this, SIGNAL(displayOffActionRequested()));
 
     m_serviceAvailable = true;
     Q_EMIT serviceAvailableChanged();
 
     updateConnectionStatus();
+    replayBigscreenInputFocusRequests();
 }
 
 void ControllerHandlerStatus::disconnectFromService()
@@ -74,6 +78,7 @@ void ControllerHandlerStatus::disconnectFromService()
         bus.disconnect(SERVICE, PATH, IFACE, QStringLiteral("enabledChanged"), this, SLOT(onEnabledChanged(bool)));
         bus.disconnect(SERVICE, PATH, IFACE, QStringLiteral("gameControllerEnabledChanged"), this, SLOT(onGameControllerEnabledChanged(bool)));
         bus.disconnect(SERVICE, PATH, IFACE, QStringLiteral("homeActionRequested"), this, SIGNAL(homeActionRequested()));
+        bus.disconnect(SERVICE, PATH, IFACE, QStringLiteral("displayOffActionRequested"), this, SIGNAL(displayOffActionRequested()));
 
         delete m_dbusInterface;
         m_dbusInterface = nullptr;
@@ -180,6 +185,43 @@ bool ControllerHandlerStatus::isCecControllerConnected()
     return reply.isValid() ? reply.value() : false;
 }
 
+void ControllerHandlerStatus::requestBigscreenInputFocus(const QString &source)
+{
+    if (source.isEmpty()) {
+        return;
+    }
+
+    // QML surfaces can request focus before inputhandler is ready. Keep the
+    // desired state locally so reconnecting to the service restores navigation.
+    m_requestedBigscreenInputFocusSources.insert(source);
+    if (m_dbusInterface) {
+        m_dbusInterface->asyncCall(QStringLiteral("requestBigscreenInputFocus"), source);
+    }
+}
+
+void ControllerHandlerStatus::releaseBigscreenInputFocus(const QString &source)
+{
+    if (source.isEmpty()) {
+        return;
+    }
+
+    m_requestedBigscreenInputFocusSources.remove(source);
+    if (m_dbusInterface) {
+        m_dbusInterface->asyncCall(QStringLiteral("releaseBigscreenInputFocus"), source);
+    }
+}
+
+void ControllerHandlerStatus::replayBigscreenInputFocusRequests()
+{
+    if (!m_dbusInterface) {
+        return;
+    }
+
+    for (const QString &source : std::as_const(m_requestedBigscreenInputFocusSources)) {
+        m_dbusInterface->asyncCall(QStringLiteral("requestBigscreenInputFocus"), source);
+    }
+}
+
 void ControllerHandlerStatus::onSdlControllerAdded(const QString &name)
 {
     m_sdlControllerConnected = true;
@@ -210,7 +252,7 @@ void ControllerHandlerStatus::onCecControllerRemoved(const QString &name)
 
 void ControllerHandlerStatus::onInputSuppressedChanged(bool suppressed, bool automatic)
 {
-    // Fetch the current manual suppression state from DBus
+    // The signal tells us suppression changed; the manual/automatic split lives on the property.
     bool newManuallySuppressed = m_inputManuallySuppressed;
     if (m_dbusInterface) {
         newManuallySuppressed = m_dbusInterface->property("inputManuallySuppressed").toBool();

@@ -23,6 +23,15 @@ Bigscreen.ScrollablePage {
     title: i18n("System")
     background: null
 
+    readonly property var automaticScreenOffTimeouts: [
+        { label: i18n("5 minutes"), value: 5 },
+        { label: i18n("10 minutes"), value: 10 },
+        { label: i18n("15 minutes"), value: 15 },
+        { label: i18n("20 minutes"), value: 20 },
+        { label: i18n("30 minutes"), value: 30 },
+        { label: i18n("1 hour"), value: 60 },
+    ]
+
     leftPadding: Kirigami.Units.smallSpacing
     topPadding: Kirigami.Units.smallSpacing
     rightPadding: Kirigami.Units.smallSpacing
@@ -118,12 +127,65 @@ Bigscreen.ScrollablePage {
         Bigscreen.SwitchDelegate {
             id: pmInhibitionDelegate
             Layout.bottomMargin: Kirigami.Units.smallSpacing
-            KeyNavigation.down: timeDateDelegate
+            KeyNavigation.down: powerButtonDelegate
 
             text: i18n("Power inhibition")
             description: i18n("Prevent the system from automatically sleeping")
             checked: BigscreenShell.Settings.pmInhibitionActive ? true : false
             onCheckedChanged: BigscreenShell.Settings.pmInhibitionActive = checked
+        }
+
+        Bigscreen.SwitchDelegate {
+            id: powerButtonDelegate
+            Layout.bottomMargin: Kirigami.Units.smallSpacing
+            KeyNavigation.down: automaticScreenOffDelegate
+
+            text: i18n("Power button turns screen off")
+            description: i18n("Use a short press of the system power button for TV-style display standby. Long press remains available for real power off.")
+            checked: BigscreenShell.Settings.powerButtonTurnsOffScreen ? true : false
+            onCheckedChanged: BigscreenShell.Settings.powerButtonTurnsOffScreen = checked
+        }
+
+        Bigscreen.SwitchDelegate {
+            id: automaticScreenOffDelegate
+            Layout.bottomMargin: Kirigami.Units.smallSpacing
+            KeyNavigation.down: automaticScreenOffTimeoutDelegate
+
+            text: i18n("Turn screen off after inactivity")
+            description: i18n("Use real display standby to help protect TVs and monitors while keeping the system running.")
+            checked: BigscreenShell.Settings.automaticScreenOffEnabled ? true : false
+            onCheckedChanged: BigscreenShell.Settings.automaticScreenOffEnabled = checked
+        }
+
+        Bigscreen.ComboBoxDelegate {
+            id: automaticScreenOffTimeoutDelegate
+            Layout.bottomMargin: Kirigami.Units.smallSpacing
+            KeyNavigation.down: timeDateDelegate
+
+            text: i18n("Screen off timeout")
+            enabled: automaticScreenOffDelegate.checked
+            model: root.automaticScreenOffTimeouts
+            textRole: "label"
+            valueRole: "value"
+            displayText: currentText
+
+            function updateIndex() {
+                const index = indexOfValue(BigscreenShell.Settings.automaticScreenOffMinutes);
+                currentIndex = index >= 0 ? index : indexOfValue(20);
+            }
+
+            Component.onCompleted: updateIndex()
+            Connections {
+                target: BigscreenShell.Settings
+                function onAutomaticScreenOffChanged() {
+                    automaticScreenOffTimeoutDelegate.updateIndex();
+                }
+            }
+
+            onActivated: {
+                BigscreenShell.Settings.automaticScreenOffMinutes = currentValue;
+                updateIndex();
+            }
         }
 
         Bigscreen.ButtonDelegate {

@@ -21,6 +21,307 @@ Bigscreen.SidebarOverlay {
 
     property bool connecting: false
     property bool disconnecting: false
+    property string operationError: ""
+    property bool autoConnectOnOpen: false
+    property bool connectAfterPair: false
+    property int connectAfterPairAttempts: 0
+    property int inputConnectionRetryAttempts: 0
+    property int inputReadinessRefreshAttempts: 0
+    property int operationSerial: 0
+    readonly property int maxInputConnectionRetryAttempts: 2
+
+    function operationStatusText() {
+        if (operationError) {
+            return operationError;
+        }
+        if (connecting) {
+            return i18n("Keep the device awake and in pairing mode until this finishes");
+        }
+        if (device && Script.isInputDevice(device) && device.connected) {
+            if (!kcm.inputHandlerAvailable) {
+                return i18n("Connected. Bigscreen input service is not available yet.");
+            }
+            if (kcm.hasConnectedInputControllerForDevice(device)) {
+                return i18n("Ready for Bigscreen navigation.");
+            }
+            return i18n("Connected. Press a button on the controller to finish input setup.");
+        }
+        if (device && Script.isInputDevice(device) && device.paired) {
+            return i18n("Trusted input devices can reconnect automatically.");
+        }
+        return "";
+    }
+
+    function primaryActionText() {
+        if (!device) {
+            return "";
+        }
+        if (connecting) {
+            return i18n("Connecting…");
+        }
+        if (disconnecting) {
+            return i18n("Disconnecting…");
+        }
+        if (device.connected) {
+            return Script.isInputDevice(device) ? i18n("Disconnect controller") : i18n("Disconnect");
+        }
+        if (!device.paired) {
+            return Script.isInputDevice(device) ? i18n("Pair controller") : i18n("Pair");
+        }
+        return Script.isInputDevice(device) ? i18n("Connect controller") : i18n("Connect");
+    }
+
+    function markInputDeviceTrusted() {
+        if (device && Script.isInputDevice(device) && device.paired && !device.trusted) {
+            device.trusted = true;
+        }
+    }
+
+    function prepareInputDeviceConnection() {
+        if (!device || !Script.isInputDevice(device)) {
+            return;
+        }
+
+        if (device.blocked) {
+            device.blocked = false;
+        }
+
+        markInputDeviceTrusted();
+    }
+
+    function beginOperation() {
+        operationSerial++;
+        operationTimeoutTimer.restart();
+        return operationSerial;
+    }
+
+    function refreshInputReadiness() {
+        if (device && Script.isInputDevice(device) && device.connected && kcm.inputHandlerAvailable) {
+            kcm.refreshInputControllers();
+        }
+    }
+
+    function resetInputReadinessPolling() {
+        inputReadinessRefreshAttempts = 0;
+        refreshInputReadiness();
+    }
+
+    function resetTransientOperationState(clearAutoConnect) {
+        // Invalidate callbacks from pair/connect/disconnect calls after the sidebar closes.
+        operationSerial++;
+        operationTimeoutTimer.stop();
+        connectAfterPairTimer.stop();
+        inputConnectionRetryTimer.stop();
+
+        connecting = false;
+        disconnecting = false;
+        operationError = "";
+        connectAfterPair = false;
+        connectAfterPairAttempts = 0;
+        inputConnectionRetryAttempts = 0;
+        inputReadinessRefreshAttempts = 0;
+
+        if (clearAutoConnect) {
+            autoConnectOnOpen = false;
+        }
+    }
+
+    function startAutoConnectOnOpen() {
+        if (!autoConnectOnOpen) {
+            return;
+        }
+
+        autoConnectOnOpen = false;
+        // Known controllers are opened from the "Add game controller" flow to reconnect now.
+        if (device && Script.isInputDevice(device) && device.paired && !device.connected && !connecting && !disconnecting) {
+            operationError = "";
+            startDeviceConnection(false);
+        }
+    }
+
+    function finishOperation(call, fallbackError, connectAfterSuccess, serial) {
+        if (serial !== operationSerial) {
+            return;
+        }
+
+        operationTimeoutTimer.stop();
+        root.connecting = false;
+        root.disconnecting = false;
+
+        if (call.error) {
+            inputConnectionRetryTimer.stop();
+            root.inputConnectionRetryAttempts = 0;
+            root.operationError = call.errorText || fallbackError;
+            return;
+        }
+
+        root.operationError = "";
+        root.inputConnectionRetryAttempts = 0;
+        markInputDeviceTrusted();
+        refreshInputReadiness();
+
+        if (connectAfterSuccess && device && Script.isInputDevice(device) && !device.connected) {
+            root.connectAfterPair = true;
+            root.connectAfterPairAttempts = 0;
+            root.connecting = true;
+            connectAfterPairTimer.restart();
+        }
+    }
+
+    function connectInputDeviceAfterPair() {
+        if (!connectAfterPair || !device || !Script.isInputDevice(device)) {
+            return;
+        }
+
+        if (device.connected) {
+            root.connectAfterPair = false;
+            root.connecting = false;
+            root.operationError = "";
+            root.resetInputReadinessPolling();
+            return;
+        }
+
+        if (!device.paired) {
+            if (connectAfterPairAttempts < 8) {
+                connectAfterPairAttempts++;
+                connectAfterPairTimer.restart();
+            } else {
+                root.connectAfterPair = false;
+                root.connecting = false;
+                root.operationError = i18n("Pairing finished, but the controller is not ready yet. Press a button on the controller, then try Connect.");
+            }
+            return;
+        }
+
+        root.connectAfterPair = false;
+        startDeviceConnection(false);
+    }
+
+    function inputConnectionFailureRetryable(call) {
+        if (!call.error || !device || !Script.isInputDevice(device) || !device.paired || device.connected) {
+            return false;
+        }
+
+        const errorText = call.errorText ? call.errorText.toLowerCase() : "";
+        // Controllers often fail once while waking up; retry those transient failures only.
+        return !errorText.includes("authentication")
+            && !errorText.includes("not paired")
+            && !errorText.includes("rejected")
+            && !errorText.includes("canceled")
+            && !errorText.includes("cancelled");
+    }
+
+    function startDeviceConnection(retry) {
+        if (!device) {
+            return;
+        }
+
+        if (!retry) {
+            root.inputConnectionRetryAttempts = 0;
+        }
+
+        prepareInputDeviceConnection();
+        const serial = beginOperation();
+        root.connecting = true;
+        Script.makeCall(device.connectToDevice(), connectCall => {
+            root.finishConnectionOperation(connectCall, serial);
+        });
+    }
+
+    function finishConnectionOperation(call, serial) {
+        if (serial !== operationSerial) {
+            return;
+        }
+
+        if (inputConnectionFailureRetryable(call) && root.inputConnectionRetryAttempts < root.maxInputConnectionRetryAttempts) {
+            root.inputConnectionRetryAttempts++;
+            root.operationError = i18n("Connection did not complete. Press a controller button; retrying…");
+            inputConnectionRetryTimer.restart();
+            return;
+        }
+
+        root.finishOperation(call, i18n("Connecting failed"), false, serial);
+    }
+
+    Timer {
+        id: operationTimeoutTimer
+        interval: 30000
+        repeat: false
+        onTriggered: {
+            root.operationSerial++;
+            root.connecting = false;
+            root.disconnecting = false;
+            root.connectAfterPair = false;
+            root.inputConnectionRetryAttempts = 0;
+            inputConnectionRetryTimer.stop();
+            root.operationError = i18n("The Bluetooth operation timed out. Keep the controller awake and try again.");
+        }
+    }
+
+    Timer {
+        id: connectAfterPairTimer
+        interval: 500
+        repeat: false
+        onTriggered: root.connectInputDeviceAfterPair()
+    }
+
+    Timer {
+        id: inputConnectionRetryTimer
+        interval: 900
+        repeat: false
+        onTriggered: {
+            if (!device || !root.connecting || device.connected) {
+                root.inputConnectionRetryAttempts = 0;
+                return;
+            }
+
+            root.startDeviceConnection(true);
+        }
+    }
+
+    Timer {
+        id: inputReadinessRefreshTimer
+        interval: 1000
+        repeat: true
+        running: root.opened
+            && device
+            && Script.isInputDevice(device)
+            && device.connected
+            && kcm.inputHandlerAvailable
+            && !kcm.hasConnectedInputControllerForDevice(device)
+            && root.inputReadinessRefreshAttempts < 20
+        onTriggered: {
+            root.inputReadinessRefreshAttempts++;
+            root.refreshInputReadiness();
+        }
+    }
+
+    Connections {
+        target: root.device
+        ignoreUnknownSignals: true
+
+        function onPairedChanged() {
+            root.connectInputDeviceAfterPair();
+        }
+
+        function onConnectedChanged() {
+            if (device && device.connected) {
+                inputConnectionRetryTimer.stop();
+                root.inputConnectionRetryAttempts = 0;
+            }
+            root.connectInputDeviceAfterPair();
+            root.resetInputReadinessPolling();
+        }
+    }
+
+    onOpened: {
+        resetInputReadinessPolling();
+        Qt.callLater(startAutoConnectOnOpen);
+    }
+    onClosed: resetTransientOperationState(true)
+    onDeviceChanged: {
+        resetTransientOperationState(false);
+    }
 
     header: Bigscreen.SidebarOverlayHeader {
         iconSource: device ? device.icon : ""
@@ -45,39 +346,44 @@ Bigscreen.SidebarOverlay {
         Bigscreen.ButtonDelegate {
             id: connectToggleButton
 
-            text: device ? (root.connecting ? i18n("Connecting…") : (root.disconnecting ? i18n("Disconnecting…") : (device.connected ? i18n("Disconnect") : (!device.paired ? i18n("Pair") : i18n("Connect"))))) : ""
+            text: root.primaryActionText()
+            description: root.operationStatusText()
             icon.name: device ? (device.connected ? "network-disconnect" : "network-connect") : ""
+            enabled: device && !root.connecting && !root.disconnecting
 
             KeyNavigation.down: forgetButton
             Keys.onLeftPressed: root.close()
 
             onClicked: {
+                root.operationError = "";
                 if (!device.paired) {
+                    const serial = root.beginOperation();
                     root.connecting = true;
+                    root.prepareInputDeviceConnection();
                     Script.makeCall(device.pair(), call => {
-                        root.connecting = false;
-                        if (call.error) {
-                            console.log("makeCall error when pairing: " + call.errorText)
-                        }
+                        root.finishOperation(call, i18n("Pairing failed"), true, serial);
                     });
                 } else if (device.connected) {
+                    const serial = root.beginOperation();
                     root.disconnecting = true;
                     Script.makeCall(device.disconnectFromDevice(), call => {
-                        root.disconnecting = false;
-                        if (call.error) {
-                            console.log("makeCall error when disconnecting: " + call.errorText);
-                        }
+                        root.finishOperation(call, i18n("Disconnecting failed"), false, serial);
                     });
                 } else {
-                    root.connecting = true;
-                    Script.makeCall(device.connectToDevice(), call => {
-                        root.connecting = false;
-                        if (call.error) {
-                            console.log("makeCall error when connecting: " + call.errorText);
-                        }
-                    });
+                    root.startDeviceConnection(false);
                 }
             }
+        }
+
+        Bigscreen.TextDelegate {
+            visible: device && Script.isInputDevice(device)
+            text: i18n("Controller setup")
+            description: device && device.connected
+                ? (kcm.hasConnectedInputControllerForDevice(device)
+                    ? i18n("Input is ready. Use the controller to move around Bigscreen.")
+                    : i18n("If navigation does not start, press a controller button once or open Input settings to confirm it is detected."))
+                : Script.controllerPairingHint(device)
+            icon.name: "input-gamepad-symbolic"
         }
 
         Bigscreen.ButtonDelegate {

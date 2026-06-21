@@ -6,8 +6,12 @@
 
 #pragma once
 
+#include <QDBusContext>
+#include <QDBusServiceWatcher>
+#include <QHash>
 #include <QList>
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
@@ -18,7 +22,7 @@ class SdlController;
 class CECController;
 #endif
 
-class InputHandlerDBus : public QObject
+class InputHandlerDBus : public QObject, protected QDBusContext
 {
     Q_OBJECT
     Q_CLASSINFO("D-Bus Interface", "org.kde.plasma.bigscreen.inputhandler")
@@ -61,6 +65,9 @@ public Q_SLOTS:
     Q_SCRIPTABLE QVariantList connectedControllers() const;
     Q_SCRIPTABLE void setControllerEnabled(const QString &uniqueIdentifier, bool enabled);
     Q_SCRIPTABLE void setStartButtonEnabledWhenSuppressed(const QString &uniqueIdentifier, bool enabled);
+    Q_SCRIPTABLE void prepareForDisplayOffWake();
+    Q_SCRIPTABLE void requestBigscreenInputFocus(const QString &source);
+    Q_SCRIPTABLE void releaseBigscreenInputFocus(const QString &source);
 
 Q_SIGNALS:
     // DBus signals
@@ -71,13 +78,20 @@ Q_SIGNALS:
     Q_SCRIPTABLE void inputSuppressedChanged(bool suppressed, bool automatic);
     Q_SCRIPTABLE void autoSuppressInputChanged(bool enabled);
     Q_SCRIPTABLE void homeActionRequested();
+    Q_SCRIPTABLE void displayOffActionRequested();
     Q_SCRIPTABLE void enabledChanged(bool enabled);
     Q_SCRIPTABLE void gameControllerEnabledChanged(bool enabled);
     Q_SCRIPTABLE void cecEnabledChanged(bool enabled);
     Q_SCRIPTABLE void connectedControllersChanged();
 
 private:
+    QString callerService() const;
+    bool sourceOwnedByOtherCallers(const QString &source, const QString &caller) const;
+    void releaseBigscreenInputFocusForCaller(const QString &caller);
+
     SdlController *m_sdlController = nullptr;
+    QDBusServiceWatcher *m_bigscreenInputFocusWatcher = nullptr;
+    QHash<QString, QSet<QString>> m_bigscreenInputFocusSourcesByCaller;
 
 #ifdef HAS_LIBCEC
     CECController *m_cecController = nullptr;

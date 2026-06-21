@@ -8,6 +8,8 @@
 #include "inputhandlersettings.h"
 #include "xdgremotedesktopsystem.h"
 
+#include <QDebug>
+
 ControllerManager::ControllerManager(QObject *parent)
     : QObject(parent)
 {
@@ -20,6 +22,15 @@ ControllerManager::ControllerManager(QObject *parent)
     QStringList startButtonDisabledWhenSuppressedControllers = settings->startButtonDisabledWhenSuppressedControllers();
     m_startButtonDisabledWhenSuppressedControllers =
         QSet<QString>(startButtonDisabledWhenSuppressedControllers.cbegin(), startButtonDisabledWhenSuppressedControllers.cend());
+
+    m_displayOffWakeSwallowTimer.setSingleShot(true);
+    m_displayOffWakeSwallowTimer.setInterval(DISPLAY_OFF_WAKE_SWALLOW_TIMEOUT);
+    connect(&m_displayOffWakeSwallowTimer, &QTimer::timeout, this, [this]() {
+        if (m_swallowNextDisplayOffInput) {
+            qDebug() << "Display-off wake input swallow window expired";
+            m_swallowNextDisplayOffInput = false;
+        }
+    });
 
     resetInputSystem();
 }
@@ -61,6 +72,11 @@ void ControllerManager::deviceRemoved(Device *device)
 
 void ControllerManager::removeDevice(int deviceIndex)
 {
+    if (deviceIndex < 0 || deviceIndex >= m_connectedDevices.size()) {
+        qWarning() << "Ignoring disconnect for invalid device index:" << deviceIndex;
+        return;
+    }
+
     Device *removedDevice = m_connectedDevices.at(deviceIndex);
     m_connectedDevices.remove(deviceIndex);
 
@@ -141,7 +157,15 @@ void ControllerManager::emitPointerButton(int button, bool pressed)
 
 void ControllerManager::emitKey(Device *device, int key, bool pressed)
 {
-    if (!m_inputSystem || !device) {
+    if (!device) {
+        return;
+    }
+
+    if (pressed && consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
+    if (!m_inputSystem) {
         return;
     }
 
@@ -162,6 +186,10 @@ void ControllerManager::emitKey(Device *device, int key, bool pressed)
 
 void ControllerManager::emitPointerMotion(Device *device, double deltaX, double deltaY)
 {
+    if (consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
     if (!deviceAllowed(device) || !m_inputSystem) {
         return;
     }
@@ -171,7 +199,15 @@ void ControllerManager::emitPointerMotion(Device *device, double deltaX, double 
 
 void ControllerManager::emitPointerButton(Device *device, int button, bool pressed)
 {
-    if (!m_inputSystem || !device) {
+    if (!device) {
+        return;
+    }
+
+    if (pressed && consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
+    if (!m_inputSystem) {
         return;
     }
 
@@ -198,11 +234,34 @@ void ControllerManager::emitHomeAction()
 
 void ControllerManager::emitHomeAction(Device *device)
 {
+    if (consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
     if (!deviceAllowed(device)) {
         return;
     }
 
     emitHomeAction();
+}
+
+void ControllerManager::emitDisplayOffAction()
+{
+    qDebug() << "Display off action invoked";
+    Q_EMIT displayOffActionRequested();
+}
+
+void ControllerManager::emitDisplayOffAction(Device *device)
+{
+    if (consumeDisplayOffWakeInput(device)) {
+        return;
+    }
+
+    if (!deviceAllowed(device)) {
+        return;
+    }
+
+    emitDisplayOffAction();
 }
 
 ControllerManager::~ControllerManager()
@@ -353,6 +412,15 @@ void ControllerManager::setStartButtonEnabledWhenSuppressed(const QString &uniqu
     Q_EMIT connectedControllersChanged();
 }
 
+void ControllerManager::prepareForDisplayOffWake()
+{
+    qDebug() << "Preparing to swallow the next display-off wake input";
+    // The button that wakes the TV should not also activate the focused UI item.
+    // Keep this armed briefly so a failed display-off request cannot eat input later.
+    m_swallowNextDisplayOffInput = true;
+    m_displayOffWakeSwallowTimer.start();
+}
+
 QVariantList ControllerManager::connectedControllers() const
 {
     QVariantList controllers;
@@ -363,6 +431,10 @@ QVariantList ControllerManager::connectedControllers() const
         controller.insert(QStringLiteral("iconName"), device->iconName());
         controller.insert(QStringLiteral("controllerEnabled"), controllerEnabled(device->getUniqueIdentifier()));
         controller.insert(QStringLiteral("startButtonEnabledWhenSuppressed"), startButtonEnabledWhenSuppressed(device->getUniqueIdentifier()));
+        if (!device->controllerFamilyId().isEmpty()) {
+            controller.insert(QStringLiteral("controllerFamily"), device->controllerFamilyId());
+            controller.insert(QStringLiteral("controllerFamilyName"), device->controllerFamilyName());
+        }
 
         switch (device->getDeviceType()) {
         case DeviceCEC:
@@ -398,6 +470,18 @@ bool ControllerManager::deviceAllowed(Device *device) const
     }
 
     return false;
+}
+
+bool ControllerManager::consumeDisplayOffWakeInput(Device *device)
+{
+    if (!m_swallowNextDisplayOffInput || !deviceAllowed(device)) {
+        return false;
+    }
+
+    m_swallowNextDisplayOffInput = false;
+    m_displayOffWakeSwallowTimer.stop();
+    qDebug() << "Swallowed display-off wake input from" << device->getName();
+    return true;
 }
 
 Device *ControllerManager::deviceForUniqueIdentifier(const QString &uniqueIdentifier) const

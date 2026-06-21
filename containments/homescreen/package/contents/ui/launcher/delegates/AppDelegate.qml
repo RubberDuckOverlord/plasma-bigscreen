@@ -7,6 +7,7 @@
 
 import QtQuick
 import org.kde.bigscreen as Bigscreen
+import org.kde.bigscreen.controllerhandler as ControllerHandler
 import org.kde.kirigami as Kirigami
 import org.kde.plasma.private.nanoshell as NanoShell
 import org.kde.plasma.plasmoid
@@ -24,6 +25,8 @@ IconDelegate {
 
     onClicked: {
         Bigscreen.NavigationSoundEffects.playClickedSound();
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("homescreen");
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay");
         if (Plasmoid.applicationListModel.isApplicationRunning(delegate.applicationStorageId)) {
             Plasmoid.applicationListModel.maximizeApplication(delegate.applicationStorageId);
         } else {

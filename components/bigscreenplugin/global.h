@@ -27,6 +27,7 @@ public:
     explicit Global(QObject *parent = nullptr);
 
     Q_INVOKABLE void promptLogoutGreeter(const QString message);
+    Q_INVOKABLE void turnOffScreen();
 
     QString launchReason() const;
     Q_INVOKABLE void swapSession();

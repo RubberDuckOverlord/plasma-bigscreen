@@ -41,10 +41,15 @@ T.Button {
         translucentHighlight: root.flat
     }
 
-    onPressed: root.forceActiveFocus()
-    Keys.onReturnPressed: {
+    function activateFromKeyboard(event) {
         click();
+        event.accepted = true;
     }
+
+    onPressed: root.forceActiveFocus()
+    Keys.onReturnPressed: event => activateFromKeyboard(event)
+    Keys.onEnterPressed: event => activateFromKeyboard(event)
+    Keys.onSpacePressed: event => activateFromKeyboard(event)
 
     onActiveFocusChanged: {
         if (activeFocus) {

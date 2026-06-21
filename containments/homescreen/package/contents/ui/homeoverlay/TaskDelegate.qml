@@ -7,6 +7,7 @@ import QtQuick.Controls as QQC2
 
 import org.kde.kirigami as Kirigami
 import org.kde.bigscreen as Bigscreen
+import org.kde.bigscreen.controllerhandler as ControllerHandler
 
 Bigscreen.ItemDelegate {
     id: root
@@ -40,6 +41,8 @@ Bigscreen.ItemDelegate {
     opacity: 1 - closeFactor
 
     onClicked: {
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("homescreen");
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("home-overlay");
         tasksModel.minimizeAllTasks();
         tasksModel.requestActivate(tasksModel.makeModelIndex(index));
         root.closeHomeRequested();

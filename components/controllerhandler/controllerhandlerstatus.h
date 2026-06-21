@@ -6,6 +6,7 @@
 #include <QDBusInterface>
 #include <QDBusServiceWatcher>
 #include <QObject>
+#include <QSet>
 #include <qqmlregistration.h>
 
 class ControllerHandlerStatus : public QObject
@@ -38,6 +39,8 @@ public:
 
     Q_INVOKABLE bool isSdlControllerConnected();
     Q_INVOKABLE bool isCecControllerConnected();
+    Q_INVOKABLE void requestBigscreenInputFocus(const QString &source);
+    Q_INVOKABLE void releaseBigscreenInputFocus(const QString &source);
 
 Q_SIGNALS:
     void sdlControllerConnectedChanged();
@@ -52,6 +55,7 @@ Q_SIGNALS:
     void cecControllerAdded(const QString &name);
     void cecControllerRemoved(const QString &name);
     void homeActionRequested();
+    void displayOffActionRequested();
 
 private Q_SLOTS:
     void connectToService();
@@ -65,6 +69,7 @@ private Q_SLOTS:
     void onGameControllerEnabledChanged(bool enabled);
 
 private:
+    void replayBigscreenInputFocusRequests();
     void updateConnectionStatus();
 
     QDBusInterface *m_dbusInterface = nullptr;
@@ -77,4 +82,5 @@ private:
     bool m_inputManuallySuppressed = false;
     bool m_enabled = true;
     bool m_gameControllerEnabled = true;
+    QSet<QString> m_requestedBigscreenInputFocusSources;
 };

@@ -12,6 +12,7 @@
 #include <QScopedPointer>
 #include <QSet>
 #include <QString>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -50,6 +51,7 @@ public:
 
     QVariantList connectedControllers() const;
     void releasePressedInput(Device *device);
+    void prepareForDisplayOffWake();
 
 public Q_SLOTS:
     void emitKey(int key, bool pressed);
@@ -60,12 +62,15 @@ public Q_SLOTS:
     void emitPointerButton(Device *device, int button, bool pressed);
     void emitHomeAction();
     void emitHomeAction(Device *device);
+    void emitDisplayOffAction();
+    void emitDisplayOffAction(Device *device);
     void removeDevice(int deviceIndex);
 
 Q_SIGNALS:
     void deviceConnected(Device *);
     void deviceDisconnected(Device *);
     void homeActionRequested();
+    void displayOffActionRequested();
     void enabledChanged(bool enabled);
     void gameControllerEnabledChanged(bool enabled);
     void cecEnabledChanged(bool enabled);
@@ -73,6 +78,7 @@ Q_SIGNALS:
 
 private:
     bool deviceAllowed(Device *device) const;
+    bool consumeDisplayOffWakeInput(Device *device);
     Device *deviceForUniqueIdentifier(const QString &uniqueIdentifier) const;
     void releaseAllPressedInput();
     void releasePressedInput(DeviceType type);
@@ -89,4 +95,8 @@ private:
     QHash<Device *, QSet<int>> m_pressedPointerButtons;
     QSet<int> m_pressedKeysWithoutDevice;
     QSet<int> m_pressedPointerButtonsWithoutDevice;
+    QTimer m_displayOffWakeSwallowTimer;
+    bool m_swallowNextDisplayOffInput = false;
+
+    static constexpr int DISPLAY_OFF_WAKE_SWALLOW_TIMEOUT = 30000;
 };

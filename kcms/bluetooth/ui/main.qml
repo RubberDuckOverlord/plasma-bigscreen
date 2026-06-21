@@ -19,6 +19,8 @@ import org.kde.bigscreen as Bigscreen
 
 import org.kde.plasma.bigscreen.bluetooth
 
+import "script.js" as Script
+
 Bigscreen.ScrollablePage {
     id: bluetoothView
 
@@ -31,19 +33,106 @@ Bigscreen.ScrollablePage {
     bottomPadding: Kirigami.Units.smallSpacing
 
     property BluezQt.Manager manager: BluezQt.Manager
+    readonly property var usableAdapter: manager.usableAdapter
+    readonly property int adapterCount: BluezQt.Manager.adapters ? BluezQt.Manager.adapters.length : 0
+    readonly property bool bluetoothReady: BluezQt.Manager.bluetoothOperational && usableAdapter
+    readonly property bool discovering: bluetoothReady && usableAdapter.discovering
+    property string discoveryError: ""
+
+    function bluetoothUnavailableTitle() {
+        if (adapterCount === 0) {
+            return i18n("No Bluetooth adapter found");
+        }
+        if (BluezQt.Manager.bluetoothBlocked) {
+            return i18n("Bluetooth is blocked");
+        }
+        return i18n("Bluetooth is off");
+    }
+
+    function bluetoothUnavailableDescription() {
+        if (adapterCount === 0) {
+            return i18n("Connect a Bluetooth adapter to pair controllers and remotes.");
+        }
+        if (BluezQt.Manager.bluetoothBlocked) {
+            return i18n("Turn Bluetooth on to pair or reconnect controllers.");
+        }
+        return i18n("Turn Bluetooth on to power the adapter and scan for controllers.");
+    }
+
+    function startDiscovery() {
+        if (!bluetoothReady) {
+            discoveryStopTimer.stop();
+            return;
+        }
+
+        // Discovery is intentionally bounded; continuous scans are noisy on small systems.
+        discoveryError = "";
+        discoveryStopTimer.restart();
+        if (discovering) {
+            return;
+        }
+
+        Script.makeCall(usableAdapter.startDiscovery(), call => {
+            if (call.error) {
+                discoveryError = call.errorText;
+                discoveryStopTimer.stop();
+            }
+        });
+    }
+
+    function stopDiscovery() {
+        discoveryStopTimer.stop();
+        if (!discovering) {
+            return;
+        }
+
+        Script.makeCall(usableAdapter.stopDiscovery(), () => {});
+    }
+
+    function openDeviceSidebar(device, focusDelegate, autoConnectOnOpen) {
+        // Pairing/connecting is a focused task, so stop scanning while the sidebar is open.
+        stopDiscovery();
+        sidebarOverlay.delegate = focusDelegate;
+        sidebarOverlay.autoConnectOnOpen = autoConnectOnOpen || false;
+        sidebarOverlay.device = device;
+        sidebarOverlay.open();
+    }
 
     Connections {
         target: manager
 
         onUsableAdapterChanged: {
-            manager.usableAdapter.startDiscovery();
+            if (bluetoothView.bluetoothReady) {
+                bluetoothView.startDiscovery();
+            } else {
+                bluetoothView.stopDiscovery();
+            }
         }
     }
+
+    Component.onCompleted: startDiscovery()
+    Component.onDestruction: stopDiscovery()
 
     onActiveFocusChanged: {
         if (activeFocus) {
             bluetoothToggle.forceActiveFocus();
+            startDiscovery();
         }
+    }
+
+    Timer {
+        id: discoveryRestartTimer
+        interval: 500
+        repeat: false
+        onTriggered: bluetoothView.startDiscovery()
+    }
+
+    Timer {
+        id: discoveryStopTimer
+        // Long enough for pairing mode, short enough to avoid leaving discovery running.
+        interval: 60000
+        repeat: false
+        onTriggered: bluetoothView.stopDiscovery()
     }
 
     DevicesProxyModel {
@@ -55,6 +144,20 @@ Bigscreen.ScrollablePage {
     DevicesProxyModel {
         id: unpairedDevicesModel
         pairedOnly: false
+        sourceModel: BluezQt.DevicesModel {}
+    }
+
+    DevicesProxyModel {
+        id: controllerCandidatesModel
+        pairedOnly: false
+        controllerDevicesOnly: true
+        sourceModel: BluezQt.DevicesModel {}
+    }
+
+    DevicesProxyModel {
+        id: knownControllersModel
+        pairedOnly: true
+        controllerDevicesOnly: true
         sourceModel: BluezQt.DevicesModel {}
     }
 
@@ -74,13 +177,74 @@ Bigscreen.ScrollablePage {
 
                 BluezQt.Manager.bluetoothBlocked = !bluetoothStatus;
                 BluezQt.Manager.adapters.forEach(adapter => {
-                    adapter.powered = !bluetoothStatus;
+                    adapter.powered = bluetoothStatus;
                 });
+
+                if (bluetoothStatus) {
+                    discoveryRestartTimer.restart();
+                } else {
+                    bluetoothView.stopDiscovery();
+                }
 
                 checked = Qt.binding(() => BluezQt.Manager.bluetoothOperational);
             }
 
+            KeyNavigation.down: bluetoothUnavailableDelegate.visible ? bluetoothUnavailableDelegate : addControllerButton
+        }
+
+        Bigscreen.TextDelegate {
+            id: bluetoothUnavailableDelegate
+            visible: !bluetoothView.bluetoothReady
+            text: bluetoothView.bluetoothUnavailableTitle()
+            description: bluetoothView.bluetoothUnavailableDescription()
+            icon.name: "network-bluetooth-disabled-symbolic"
+
+            KeyNavigation.up: bluetoothToggle
+            KeyNavigation.down: addControllerButton.visible ? addControllerButton : null
+        }
+
+        Bigscreen.ButtonDelegate {
+            id: addControllerButton
+            raisedBackground: false
+            visible: BluezQt.Manager.bluetoothOperational
+            text: i18n("Add game controller")
+            description: i18n("Pair Xbox, PlayStation, Steam, and other Bluetooth controllers")
+            icon.name: "input-gamepad-symbolic"
+            enabled: bluetoothView.bluetoothReady
+
+            KeyNavigation.up: bluetoothUnavailableDelegate.visible ? bluetoothUnavailableDelegate : bluetoothToggle
+            KeyNavigation.down: readyControllersDelegate.visible ? readyControllersDelegate : scanButton
+
+            onClicked: {
+                bluetoothView.startDiscovery();
+                controllerSetupDialog.open();
+            }
+        }
+
+        Bigscreen.TextDelegate {
+            id: readyControllersDelegate
+            visible: kcm.inputHandlerAvailable && kcm.connectedGameControllerCount > 0
+            text: i18np("%1 controller ready for Bigscreen", "%1 controllers ready for Bigscreen", kcm.connectedGameControllerCount)
+            description: i18n("Kodi, Steam, and games can use controllers directly. Bigscreen navigation pauses while another app is using them.")
+            icon.name: "input-gamepad-symbolic"
+
+            KeyNavigation.up: addControllerButton
+            KeyNavigation.down: scanButton
+        }
+
+        Bigscreen.ButtonDelegate {
+            id: scanButton
+            raisedBackground: false
+            visible: BluezQt.Manager.bluetoothOperational
+            text: bluetoothView.discovering ? i18n("Scanning for devices…") : i18n("Scan for devices")
+            description: bluetoothView.discoveryError || i18n("Use this while a controller is in pairing mode")
+            icon.name: bluetoothView.discoveryError ? "dialog-warning-symbolic" : "view-refresh-symbolic"
+            enabled: bluetoothView.bluetoothReady
+
+            KeyNavigation.up: readyControllersDelegate.visible ? readyControllersDelegate : addControllerButton
             KeyNavigation.down: pairedDelegateList
+
+            onClicked: bluetoothView.startDiscovery()
         }
 
         QQC2.Label {
@@ -109,9 +273,7 @@ Bigscreen.ScrollablePage {
                 raisedBackground: false
 
                 onClicked: {
-                    sidebarOverlay.delegate = pairedDelegate;
-                    sidebarOverlay.device = model.Device;
-                    sidebarOverlay.open();
+                    bluetoothView.openDeviceSidebar(model.Device, pairedDelegate);
                 }
             }
         }
@@ -142,9 +304,7 @@ Bigscreen.ScrollablePage {
                 raisedBackground: false
 
                 onClicked: {
-                    sidebarOverlay.delegate = unpairedDelegate;
-                    sidebarOverlay.device = model.Device;
-                    sidebarOverlay.open();
+                    bluetoothView.openDeviceSidebar(model.Device, unpairedDelegate);
                 }
             }
         }
@@ -159,6 +319,135 @@ Bigscreen.ScrollablePage {
                 } else {
                     pairedDevicesModel.forceActiveFocus();
                 }
+            }
+        }
+    }
+
+    Bigscreen.Dialog {
+        id: controllerSetupDialog
+        title: i18n("Add game controller")
+        openFocusItem: knownControllersModel.count > 0 ? knownControllersView : controllerScanButton
+
+        function focusInitialItem() {
+            if (knownControllersView.visible && knownControllersView.currentItem) {
+                knownControllersView.currentItem.forceActiveFocus();
+                return;
+            }
+
+            controllerScanButton.forceActiveFocus();
+        }
+
+        onOpened: {
+            bluetoothView.startDiscovery();
+            Qt.callLater(focusInitialItem);
+        }
+        onClosed: addControllerButton.forceActiveFocus()
+
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+
+            Bigscreen.TextDelegate {
+                Layout.fillWidth: true
+                text: i18n("Put your controller in pairing mode")
+                description: knownControllersModel.count > 0
+                    ? i18n("Reconnect a paired controller below, or put a new controller in pairing mode.")
+                    : i18n("For Xbox, hold the pairing button until the Xbox light flashes. For PlayStation, hold Share and PS until the light bar flashes. For Steam controllers, use Bluetooth pairing mode.")
+                icon.name: "input-gamepad-symbolic"
+            }
+
+            QQC2.Label {
+                text: i18n("Known controllers")
+                visible: knownControllersModel.count > 0
+                font.pixelSize: Bigscreen.Units.headingFontPixelSize
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                Layout.bottomMargin: Kirigami.Units.smallSpacing
+            }
+
+            ListView {
+                id: knownControllersView
+                Layout.fillWidth: true
+                implicitHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 10)
+                visible: knownControllersModel.count > 0
+                clip: true
+                spacing: Kirigami.Units.smallSpacing
+                model: knownControllersModel
+                keyNavigationEnabled: true
+                currentIndex: count > 0 ? 0 : -1
+
+                KeyNavigation.down: controllerScanButton
+
+                delegate: DeviceDelegate {
+                    id: knownControllerDelegate
+                    width: knownControllersView.width
+                    smallDescription: true
+                    raisedBackground: false
+                    controllerSetup: true
+
+                    onClicked: {
+                        controllerSetupDialog.close();
+                        bluetoothView.openDeviceSidebar(model.Device, addControllerButton, !model.Connected);
+                    }
+                }
+            }
+
+            Bigscreen.ButtonDelegate {
+                id: controllerScanButton
+                Layout.fillWidth: true
+                text: bluetoothView.discovering ? i18n("Scanning…") : i18n("Scan for new controllers")
+                description: bluetoothView.discoveryError || i18n("Only likely controllers and unresolved input devices are shown here")
+                icon.name: bluetoothView.discoveryError ? "dialog-warning-symbolic" : "view-refresh-symbolic"
+
+                KeyNavigation.up: knownControllersModel.count > 0 ? knownControllersView : null
+                KeyNavigation.down: controllerCandidatesModel.count > 0 ? controllerCandidatesView : closeControllerSetupButton
+                onClicked: bluetoothView.startDiscovery()
+            }
+
+            Bigscreen.TextDelegate {
+                Layout.fillWidth: true
+                visible: controllerCandidatesModel.count === 0
+                text: bluetoothView.discovering ? i18n("Looking for controllers…") : i18n("No new controllers found")
+                description: unpairedDevicesModel.count > 0
+                    ? i18n("Other Bluetooth devices are available in the device list below.")
+                    : i18n("Make sure the controller is nearby, awake, and still flashing.")
+                icon.name: "view-refresh-symbolic"
+            }
+
+            ListView {
+                id: controllerCandidatesView
+                Layout.fillWidth: true
+                implicitHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 14)
+                visible: count > 0
+                clip: true
+                spacing: Kirigami.Units.smallSpacing
+                model: controllerCandidatesModel
+                keyNavigationEnabled: true
+                currentIndex: count > 0 ? 0 : -1
+
+                KeyNavigation.up: controllerScanButton
+                KeyNavigation.down: closeControllerSetupButton
+
+                delegate: DeviceDelegate {
+                    id: controllerCandidateDelegate
+                    width: controllerCandidatesView.width
+                    smallDescription: true
+                    raisedBackground: false
+                    controllerSetup: true
+
+                    onClicked: {
+                        controllerSetupDialog.close();
+                        bluetoothView.openDeviceSidebar(model.Device, addControllerButton);
+                    }
+                }
+            }
+
+            Bigscreen.ButtonDelegate {
+                id: closeControllerSetupButton
+                Layout.fillWidth: true
+                text: i18n("Close")
+                icon.name: "dialog-close-symbolic"
+
+                KeyNavigation.up: controllerCandidatesModel.count > 0 ? controllerCandidatesView : controllerScanButton
+                onClicked: controllerSetupDialog.close()
             }
         }
     }

@@ -10,6 +10,7 @@ import QtQuick.Controls as Controls
 
 import org.kde.kirigami as Kirigami
 import org.kde.bigscreen as Bigscreen
+import org.kde.bigscreen.controllerhandler as ControllerHandler
 
 import org.kde.plasma.bigscreen.settings
 
@@ -31,6 +32,14 @@ Window {
     readonly property bool dualPanel: !visible || root.width > (minimumSidebarWidth * 2.5)
 
     readonly property real minimumSidebarWidth: Kirigami.Units.gridUnit * 20
+
+    function updateBigscreenInputFocus() {
+        if (root.visible && root.active) {
+            ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("settings-app");
+        } else {
+            ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("settings-app");
+        }
+    }
 
     Component.onCompleted: {
         KcmsListModel.loadKcms();
@@ -59,6 +68,7 @@ Window {
 
     function showOverlay(moduleName=undefined) {
         root.showFullScreen();
+        ControllerHandler.ControllerHandlerStatus.requestBigscreenInputFocus("settings-app");
 
         timer.setTimeout(function () {
             // Force active focus on either the sidebar or content
@@ -77,6 +87,7 @@ Window {
     }
 
     function hideOverlay() {
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("settings-app");
         if (root.visible) {
             root.close();
         }
@@ -100,15 +111,23 @@ Window {
             opacityAnim.to = 1;
             opacityAnim.restart();
         }
+        updateBigscreenInputFocus();
+    }
+
+    onActiveChanged: {
+        updateBigscreenInputFocus();
     }
 
     onClosing: (close) => {
+        ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("settings-app");
         if (configContentItem.opacity !== 0) {
             close.accepted = false;
             opacityAnim.to = 0;
             opacityAnim.restart();
         }
     }
+
+    Component.onDestruction: ControllerHandler.ControllerHandlerStatus.releaseBigscreenInputFocus("settings-app")
 
     Item {
         id: configContentItem
