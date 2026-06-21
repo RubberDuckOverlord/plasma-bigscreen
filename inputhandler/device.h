@@ -31,6 +31,9 @@ public:
     QString getName();
     DeviceType getDeviceType();
     QString iconName() const;
+    void setControllerFamily(QString id, QString displayName);
+    QString controllerFamilyId() const;
+    QString controllerFamilyName() const;
 
     /// needs to be called before newDevice() is called
     void setUsedKeys(const QSet<int> &keys)
@@ -56,5 +59,7 @@ protected:
     QString m_uniqueIdentifier;
     QString m_name;
     DeviceType m_deviceType;
+    QString m_controllerFamilyId;
+    QString m_controllerFamilyName;
     QSet<int> m_usedKeys;
 };

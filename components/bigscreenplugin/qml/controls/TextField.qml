@@ -25,6 +25,17 @@ QQC2.TextField {
 
     font.pixelSize: 18
 
+    function moveFocus(target, event) {
+        if (!target) {
+            return;
+        }
+        target.forceActiveFocus();
+        event.accepted = true;
+    }
+
+    Keys.onUpPressed: event => moveFocus(root.KeyNavigation.up, event)
+    Keys.onDownPressed: event => moveFocus(root.KeyNavigation.down, event)
+
     onActiveFocusChanged: {
         if (activeFocus) {
             Bigscreen.NavigationSoundEffects.playMovingSound();

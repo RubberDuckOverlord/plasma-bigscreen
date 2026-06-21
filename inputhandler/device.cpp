@@ -7,6 +7,7 @@
 #include "device.h"
 
 #include <QDebug>
+#include <utility>
 
 Device::Device(DeviceType deviceType, QString name, QString uniqueIdentifier)
     : m_uniqueIdentifier(uniqueIdentifier)
@@ -40,6 +41,22 @@ DeviceType Device::getDeviceType()
 QString Device::iconName() const
 {
     return m_deviceType == DeviceCEC ? QStringLiteral("video-television") : QStringLiteral("input-gamepad");
+}
+
+void Device::setControllerFamily(QString id, QString displayName)
+{
+    m_controllerFamilyId = std::move(id);
+    m_controllerFamilyName = std::move(displayName);
+}
+
+QString Device::controllerFamilyId() const
+{
+    return m_controllerFamilyId;
+}
+
+QString Device::controllerFamilyName() const
+{
+    return m_controllerFamilyName;
 }
 
 Device::~Device() = default;

@@ -8,12 +8,19 @@
 
 #include <BluezQt/Adapter>
 #include <BluezQt/Device>
+#include <QStringList>
+
+static const QString s_humanInterfaceDeviceServiceUuid = QStringLiteral("00001812-0000-1000-8000-00805f9b34fb");
 
 DevicesProxyModel::DevicesProxyModel(QObject *parent)
     : QSortFilterProxyModel(parent)
 {
     setDynamicSortFilter(true);
     sort(0, Qt::DescendingOrder);
+
+    connect(this, &QAbstractItemModel::modelReset, this, &DevicesProxyModel::rowCountChanged);
+    connect(this, &QAbstractItemModel::rowsInserted, this, &DevicesProxyModel::rowCountChanged);
+    connect(this, &QAbstractItemModel::rowsRemoved, this, &DevicesProxyModel::rowCountChanged);
 }
 
 bool DevicesProxyModel::hideBlockedDevices() const
@@ -29,7 +36,25 @@ void DevicesProxyModel::setHideBlockedDevices(bool shouldHide)
         invalidateFilter();
 
         Q_EMIT hideBlockedDevicesChanged();
+        Q_EMIT rowCountChanged();
     }
+}
+
+bool DevicesProxyModel::inputDevicesOnly() const
+{
+    return m_inputDevicesOnly;
+}
+
+void DevicesProxyModel::setInputDevicesOnly(bool inputDevicesOnly)
+{
+    if (m_inputDevicesOnly == inputDevicesOnly) {
+        return;
+    }
+
+    m_inputDevicesOnly = inputDevicesOnly;
+    invalidateFilter();
+    Q_EMIT inputDevicesOnlyChanged();
+    Q_EMIT rowCountChanged();
 }
 
 bool DevicesProxyModel::pairedOnly() const
@@ -42,6 +67,7 @@ void DevicesProxyModel::setPairedOnly(bool pairedOnly)
     if (m_pairedOnly != pairedOnly) {
         m_pairedOnly = pairedOnly;
         invalidateFilter();
+        Q_EMIT rowCountChanged();
     }
 }
 
@@ -117,16 +143,86 @@ bool DevicesProxyModel::duplicateIndexAddress(const QModelIndex &idx) const
     return list.size() > 1;
 }
 
+bool DevicesProxyModel::isInputDevice(const QModelIndex &idx) const
+{
+    switch (static_cast<BluezQt::Device::Type>(idx.data(BluezQt::DevicesModel::TypeRole).toInt())) {
+    case BluezQt::Device::Keyboard:
+    case BluezQt::Device::Mouse:
+    case BluezQt::Device::Joypad:
+    case BluezQt::Device::Tablet:
+    case BluezQt::Device::Peripheral:
+        return true;
+    default:
+        break;
+    }
+
+    const QStringList uuids = idx.data(BluezQt::DevicesModel::UuidsRole).toStringList();
+    for (const QString &uuid : uuids) {
+        if (uuid.compare(s_humanInterfaceDeviceServiceUuid, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+
+    return isLikelyControllerName(idx.data(BluezQt::DevicesModel::NameRole).toString());
+}
+
+bool DevicesProxyModel::isLikelyControllerName(const QString &name) const
+{
+    static const QStringList controllerNameFragments = {
+        QStringLiteral("controller"),
+        QStringLiteral("gamepad"),
+        QStringLiteral("xbox"),
+        QStringLiteral("dualsense"),
+        QStringLiteral("dualshock"),
+        QStringLiteral("playstation"),
+        QStringLiteral("steam"),
+        QStringLiteral("joy-con"),
+        QStringLiteral("8bitdo"),
+        QStringLiteral("stadia"),
+        QStringLiteral("luna"),
+    };
+
+    for (const QString &fragment : controllerNameFragments) {
+        if (name.contains(fragment, Qt::CaseInsensitive)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool DevicesProxyModel::isUnresolvedDeviceName(const QModelIndex &idx) const
+{
+    const QString name = idx.data(BluezQt::DevicesModel::NameRole).toString();
+    const QString address = idx.data(BluezQt::DevicesModel::AddressRole).toString();
+    return name.isEmpty() || name == address || name == QString(address).replace(QLatin1Char(':'), QLatin1Char('-'));
+}
+
 bool DevicesProxyModel::filterAcceptsRow(int source_row, const QModelIndex &source_parent) const
 {
-    const QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
-    const QString name = sourceModel()->data(index, BluezQt::DevicesModel::NameRole).toString();
-    const QString address = sourceModel()->data(index, BluezQt::DevicesModel::AddressRole).toString().replace(QLatin1Char(':'), QLatin1Char('-'));
-    if (m_pairedOnly) {
-        return !(name == address) && sourceModel()->data(index, BluezQt::DevicesModel::PairedRole).toBool();
-    } else {
-        return !(name == address) && !sourceModel()->data(index, BluezQt::DevicesModel::PairedRole).toBool();
+    if (!sourceModel()) {
+        return false;
     }
+
+    const QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
+    if (m_hideBlockedDevices && sourceModel()->data(index, BluezQt::DevicesModel::BlockedRole).toBool()) {
+        return false;
+    }
+
+    const bool paired = sourceModel()->data(index, BluezQt::DevicesModel::PairedRole).toBool();
+    if (m_pairedOnly) {
+        return paired;
+    }
+
+    if (paired) {
+        return false;
+    }
+
+    if (m_inputDevicesOnly) {
+        return isInputDevice(index) || isUnresolvedDeviceName(index);
+    }
+
+    return true;
 }
 
 QString DevicesProxyModel::adapterHciString(const QString &ubi)

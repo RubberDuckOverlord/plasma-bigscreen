@@ -39,6 +39,10 @@ DeviceWatcher::DeviceWatcher(QObject *parent)
 
     m_notifier = new QSocketNotifier(m_inotifyFd, QSocketNotifier::Read, this);
     connect(m_notifier, &QSocketNotifier::activated, this, &DeviceWatcher::onInotifyEvent);
+
+    m_recheckTimer = new QTimer(this);
+    m_recheckTimer->setInterval(IDLE_RECHECK_INTERVAL);
+    connect(m_recheckTimer, &QTimer::timeout, this, &DeviceWatcher::checkDeviceAccess);
 }
 
 DeviceWatcher::~DeviceWatcher()
@@ -91,6 +95,8 @@ void DeviceWatcher::removeDevicePath(const QString &devicePath)
         m_othersUsingDevice = false;
         Q_EMIT otherProcessesChanged(false);
     }
+
+    updateRecheckTimer();
 }
 
 void DeviceWatcher::onInotifyEvent()
@@ -112,6 +118,29 @@ void DeviceWatcher::checkDeviceAccess()
     if (othersFound != m_othersUsingDevice) {
         m_othersUsingDevice = othersFound;
         Q_EMIT otherProcessesChanged(othersFound);
+    }
+
+    updateRecheckTimer();
+}
+
+void DeviceWatcher::updateRecheckTimer()
+{
+    if (!m_recheckTimer) {
+        return;
+    }
+
+    if (m_devicePaths.isEmpty()) {
+        m_recheckTimer->stop();
+        return;
+    }
+
+    const int interval = m_othersUsingDevice ? ACTIVE_RECHECK_INTERVAL : IDLE_RECHECK_INTERVAL;
+    if (m_recheckTimer->interval() != interval) {
+        m_recheckTimer->setInterval(interval);
+    }
+
+    if (!m_recheckTimer->isActive()) {
+        m_recheckTimer->start();
     }
 }
 

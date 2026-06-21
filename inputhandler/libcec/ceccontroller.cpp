@@ -17,6 +17,7 @@
 #include <KLocalizedString>
 #include <KSharedConfig>
 #include <QDBusMetaType>
+#include <utility>
 
 #include <Solid/DeviceNotifier>
 
@@ -54,7 +55,13 @@ CECController::CECController(QObject *parent)
     KConfigGroup group = config->group("CECRemote");
 
     auto map = [&group](const char *name, int cecKey, int evKey) {
-        return std::make_pair<int, int>(group.readEntry(QString("Button") + name, cecKey), group.readEntry(QString("Key") + name, evKey));
+        int nativeKey = group.readEntry(QString("Key") + name, evKey);
+        CecInputBinding binding;
+        binding.action = inputActionForKey(nativeKey);
+        if (binding.action == InputAction::None) {
+            binding.nativeKey = nativeKey;
+        }
+        return std::make_pair(group.readEntry(QString("Button") + name, cecKey), binding);
     };
 
     m_keyMap = {
@@ -178,8 +185,15 @@ void CECController::onDeviceOpened(const QString &comName)
     if (!m_device) {
         auto *device = new Device(DeviceCEC, QStringLiteral("CEC Controller"), QStringLiteral("cec"));
 
-        QList<int> keyValues = m_keyMap.values();
-        device->setUsedKeys(QSet<int>(keyValues.cbegin(), keyValues.cend()));
+        QSet<int> usedKeys;
+        for (const CecInputBinding &binding : std::as_const(m_keyMap)) {
+            if (binding.action != InputAction::None) {
+                usedKeys.unite(keysForInputActions({binding.action}));
+            } else if (binding.nativeKey >= 0) {
+                usedKeys.insert(binding.nativeKey);
+            }
+        }
+        device->setUsedKeys(usedKeys);
 
         ControllerManager::instance().newDevice(device);
         m_device = device;
@@ -250,20 +264,38 @@ void CECController::onCecKeyPressed(int keycode, int duration)
         return;
     }
 
-    int nativeKey = m_keyMap.value(keycode, -1);
-    if (nativeKey < 0) {
+    const CecInputBinding binding = m_keyMap.value(keycode);
+    if (binding.action == InputAction::None && binding.nativeKey < 0) {
         qDebug() << "CECController: No mapping found for CEC keycode" << keycode;
         return;
     }
 
-    qDebug() << "CECController: Mapped CEC keycode" << keycode << "to native key" << nativeKey;
+    if (binding.action != InputAction::None) {
+        qDebug() << "CECController: Mapped CEC keycode" << keycode << "to action" << inputActionName(binding.action);
+        if (inputActionEmitsHome(binding.action)) {
+            qDebug() << "CECController: Home key detected, emitting home action";
+            ControllerManager::instance().emitHomeAction(m_device);
+            return;
+        }
 
-    if (nativeKey == KEY_HOMEPAGE) {
+        const QList<int> keys = keysForInputAction(binding.action);
+        for (int key : keys) {
+            ControllerManager::instance().emitKey(m_device, key, 1);
+        }
+        for (int i = keys.size() - 1; i >= 0; --i) {
+            ControllerManager::instance().emitKey(m_device, keys.at(i), 0);
+        }
+        return;
+    }
+
+    qDebug() << "CECController: Mapped CEC keycode" << keycode << "to native key" << binding.nativeKey;
+
+    if (binding.nativeKey == KEY_HOMEPAGE) {
         qDebug() << "CECController: Home key detected, emitting home action";
         ControllerManager::instance().emitHomeAction(m_device);
         return;
     }
 
-    ControllerManager::instance().emitKey(m_device, nativeKey, 1);
-    ControllerManager::instance().emitKey(m_device, nativeKey, 0);
+    ControllerManager::instance().emitKey(m_device, binding.nativeKey, 1);
+    ControllerManager::instance().emitKey(m_device, binding.nativeKey, 0);
 }
